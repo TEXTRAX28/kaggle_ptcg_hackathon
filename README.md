@@ -17,14 +17,6 @@ git branch --show-current
 git log --oneline --all --decorate -5
 ```
 
-Put downloaded win/loss match files in `match-data/`. That folder, generated
-reports under `results/`, and Graphify notes/output are excluded from Git.
-Keep reusable analysis code, small sanitized regression fixtures and the README
-in version control. Analyze the winning match as well as the loss: a win can
-contain avoidable mistakes. Tie findings to concrete turns/actions, distinguish
-observed outcomes from hypothetical alternatives, and test proposed policy
-changes before treating them as improvements.
-
 ## Kaggle notebook
 
 Open `ipynb/abomasnow_kyogre.ipynb`, attach the competition dataset in Kaggle,
