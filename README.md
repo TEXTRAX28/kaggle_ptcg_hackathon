@@ -2,7 +2,28 @@
 
 Python heuristic pilot for the supplied Mega Abomasnow ex/Kyogre deck, with an
 isolated local game runner. Uses the competition's bundled native simulator.
-No training, external API or Kaggle submission is involved.
+The policy uses hand-written rules and probabilities. The notebook packages it
+for Kaggle; generating an archive does not upload it.
+
+## Development branches and match data
+
+The current tested version is preserved on `main` at commit `842c9bb`.
+Work on match analysis and improvements on `improvement-1` so the baseline stays
+available for comparison. Before changing branches, commit or otherwise preserve
+any unfinished changes; switching branches is not a substitute for saving work.
+
+```powershell
+git branch --show-current
+git log --oneline --all --decorate -5
+```
+
+Put downloaded win/loss match files in `match-data/`. That folder, generated
+reports under `results/`, and Graphify notes/output are excluded from Git.
+Keep reusable analysis code, small sanitized regression fixtures and the README
+in version control. Analyze the winning match as well as the loss: a win can
+contain avoidable mistakes. Tie findings to concrete turns/actions, distinguish
+observed outcomes from hypothetical alternatives, and test proposed policy
+changes before treating them as improvements.
 
 ## Kaggle notebook
 
@@ -11,9 +32,11 @@ and Run All. The notebook embeds the Python sources, locates the supplied SDK,
 runs a configurable benchmark and builds a Linux `submission.tar.gz` under
 `/kaggle/working/abomasnow-kyogre/`. It requires no separate repository upload.
 
-The notebook was checked by executing all its Python code cells locally with a
-four-game smoke run; Kaggle/Linux execution has not yet been tested. Regenerate
-the notebook after changing its source modules:
+The latest notebook was checked by executing all nine Python code cells locally
+with a four-game smoke run. The user previously reported a successful Kaggle run
+of an older snapshot; the latest immunity patch has not been directly tested in
+Kaggle. Regenerate the notebook after changing its source modules, then import
+the regenerated file into Kaggle to update the embedded source snapshot:
 
 ```powershell
 python -X utf8 tools/build_notebook.py
@@ -21,8 +44,7 @@ python -X utf8 tools/build_notebook.py
 
 `.gitignore` excludes the graph, notes/history, raw snapshots, downloaded data,
 caches, local environments, benchmark results and the notebook's generated
-workspace. The notebook itself and reusable Python sources remain eligible for
-Git. The project has not been initialized as a Git repository by this task.
+workspace. The notebook itself and reusable Python sources are versioned.
 
 ## Run
 
@@ -83,11 +105,23 @@ results are not overwritten.
 - `pokemon_agent/policy.py`: setups, evolution, attachments, supporters, card
   choices, attack selection and retreat. Estimates Hammer-lanche over unknown
   own deck/prizes using visible counts, avoids avoidable deck-out and uses
-  Kyogre to recycle discarded Energy. It never reads the opaque search payload.
+  Kyogre to recycle discarded Energy. Recognizes Sylveon/Crustle protection from
+  ex attacks for this fixed deck. It never reads the opaque search payload.
 - `pokemon_agent/runner.py`: process isolation, balanced starts, result capture,
   error handling, code/native-library hashes and a 95% Wilson win-rate interval.
 - `tests/test_agent.py`: policy regressions, baseline equivalence, selection
   guards, native lifecycle, starting-order and result-accounting tests.
+- `pokemon_agent/sdk.py`: finds the supplied native SDK, loads card metadata,
+  reads the deck and validates returned option indices.
+- `tools/build_notebook.py`: generates the portable notebook from current source.
+- `tools/graph_memory.py`: records and queries local project memory; it is not
+  called by the game-playing agent.
+- `ipynb/abomasnow_kyogre.ipynb`: Kaggle entry notebook with embedded source,
+  local evaluation and archive creation.
+
+The baseline passed 16 automated tests on 2026-10-20 before the improvement branch
+was created. A local pass verifies those checks; it does not establish stronger
+play on the competition ladder.
 
 The policy is specific to this deck. Damage estimates are heuristics and do not
 model every opposing ability, temporary effect or special Energy. It is not a

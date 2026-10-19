@@ -2,6 +2,7 @@
 /graphify-out/
 /notes/
 /raw/
+/match-data/
 /.graphify*
 
 # Downloaded competition data and native SDK (attach the data in Kaggle)
