@@ -1,135 +1,192 @@
-# Pokémon TCG local baseline
+# Pokémon TCG agents for Kaggle
 
-Python heuristic pilot for the supplied Mega Abomasnow ex/Kyogre deck, with an
-isolated local game runner. Uses the competition's bundled native simulator.
-The policy uses hand-written rules and probabilities. The notebook packages it
-for Kaggle; generating an archive does not upload it.
+Two Python heuristic pilots use the competition's bundled native simulator:
+Mega Abomasnow ex/Kyogre and the new Alakazam/Dudunsparce experiment. Each has a
+Kaggle notebook that embeds its tested sources, runs local games and builds a
+submission archive. Archive creation does not upload a submission.
 
-## Development branches and match data
+## Branches
 
-The current tested version is preserved on `main` at commit `842c9bb`.
-Work on match analysis and improvements on `improvement-1` so the baseline stays
-available for comparison. Before changing branches, commit or otherwise preserve
-any unfinished changes; switching branches is not a substitute for saving work.
+| Branch | Purpose |
+|---|---|
+| `main` at `842c9bb` | Original tested Abomasnow baseline |
+| `improvement-1` at `e226a03` | Abomasnow with the two replay-based policy fixes documented below |
+| `deck-experiment-1` | Separate Alakazam deck, dedicated pilot and notebook |
+
+The original `main.py`, `deck.csv` and `pokemon_agent/policy.py` are unchanged
+from `improvement-1` on this branch. Commit or preserve unfinished work before
+switching branches.
+
+## Deck experiment 1: Alakazam / Dudunsparce
+
+Alakazam beat our Abomasnow agent in the supplied losing replay. This is a
+practical candidate to test, rather than evidence that a popular deck must win.
+Its attackers give up one Prize, and Powerful Hand needs one Psychic Energy.
+A separate pilot is necessary because its hand-building strategy differs from
+Abomasnow's Water-density strategy.
+
+The pilot evolves Abra through Kadabra or Rare Candy, uses evolution draws and
+Dudunsparce to grow its hand, and searches with Dawn/Hilda. Powerful Hand places
+20 HP of damage counters per card in hand: 18 cards can knock out a full-health
+350-HP Mega. The pilot accounts for the hand card spent on Boss's Orders, avoids
+Lillie when it would shrink a large hand, saves a draw reserve and does not
+shuffle away its sole Pokémon with Dudunsparce. It attaches Psychic to the
+Alakazam line; the 60-HP Dunsparce variant is a free-retreat pivot.
+
+The native simulator accepts this 60-card list in `decks/alakazam.csv`:
+
+| Cards | Copies each | Subtotal |
+|---|---:|---:|
+| Abra / Kadabra / Alakazam | 4 | 12 |
+| Dunsparce / Dudunsparce | 4 | 8 |
+| Basic Psychic / Telepath Psychic Energy | 4 | 8 |
+| Dawn / Hilda / Poké Pad / Buddy-Buddy Poffin / Rare Candy | 4 | 20 |
+| Lillie | 2 | 2 |
+| Boss's Orders | 3 | 3 |
+| Lana's Aid / Night Stretcher / Battle Cage | 2 | 6 |
+| Special Red Card | 1 | 1 |
+| **Total: 20 Pokémon, 8 Energy, 32 Trainers** | | **60** |
+
+All Pokémon in this list give up one Prize. Eight Basics reduce the ordinary
+seven-card probability of no Basic to 34.64%, compared with 45.86% for the
+six-Basic Abomasnow list, before redraws. These are combinatorial opening-hand
+probabilities, not game win rates. The draw engine and 60-HP bench Pokémon can
+still be punished; Battle Cage addresses some opposing bench counter effects.
+Hand disruption and a slow Stage 2 setup remain weaknesses.
+
+Results on 2026-10-20, using the frozen candidate source:
+
+| Opponent / check | Result | Interpretation |
+|---|---|---|
+| `improvement-1` Abomasnow deck and unchanged pilot | **85 wins / 15 losses** | 100 completed games; 95% Wilson interval 76.7–90.7%; no errors |
+| Random policy using the same Alakazam deck | **40 wins / 0 losses** | 40 completed games; interval 91.2–100%; no errors |
+| Unit/integration suite | **36 passed** | Existing guards plus Alakazam legality, counter math, Psychic costs, hand preservation and entry/deck checks |
+| Both generated notebooks | All 13 code cells each executed locally | Four-game smoke runs: Alakazam 2W/2L vs Abomasnow; Abomasnow 4W/0L vs random; no errors |
+| Both submission archives | Entry, deck and ten source members checked | Correct distinct decks, Linux library included, saved notebook outputs empty |
+
+The 100-game result has 50 games in each seat and starting order: 46/50 wins in
+seat 0, 39/50 in seat 1; 44/50 going first, 41/50 second. Alakazam averaged
+0.211 ms per decision, with a 2.103 ms maximum on this Windows machine. The first
+eight development games were also wins, but used an earlier pilot version and
+are excluded from the 100-game result.
+
+This compares a **new deck plus its dedicated pilot** against our local
+Abomasnow implementation. It does not isolate the deck's causal contribution,
+establish strength against competent Dragapult/other opponents, or predict a
+Kaggle rating. Local games are independent single games, not BO3 matches. The
+small notebook smoke runs are packaging checks, not additional strength claims.
+The notebook/archive have not been run in Kaggle or submitted in this task.
+
+Reports, including source/native-library fingerprints and every game, are kept
+locally under the ignored `results/` directory:
+
+- `2026-10-20-alakazam-vs-abomasnow-100.json`
+- `2026-10-20-alakazam-vs-random-40.json`
+- `2026-10-20-deck-experiment-notebook-verification.json`
+
+## Kaggle notebooks and submission files
+
+Use **`ipynb/alakazam.ipynb`** for the new deck. Attach the competition dataset
+in Kaggle's Add Input panel and Run All. The default benchmark tests Alakazam
+against Abomasnow. Its output archive is:
+
+`/kaggle/working/alakazam/submission.tar.gz`
+
+`ipynb/abomasnow_kyogre.ipynb` still builds Abomasnow at
+`/kaggle/working/abomasnow-kyogre/submission.tar.gz`. Both notebooks materialize
+their own `main.py` and `deck.csv` and keep named deck copies so the opponent
+gets its correct list. Locally their generated workspaces are respectively
+`ipynb/work/alakazam/` and `ipynb/work/abomasnow-kyogre/`.
+
+Regenerate embedded snapshots after source changes, then import the regenerated
+notebook into Kaggle. An existing Kaggle copy does not update automatically:
 
 ```powershell
-git branch --show-current
-git log --oneline --all --decorate -5
+python -X utf8 tools/build_notebook.py --agent alakazam
+python -X utf8 tools/build_notebook.py --agent abomasnow
 ```
 
-## Kaggle notebook
+Both current notebooks were executed on Windows, including benchmark subprocesses,
+archive content checks and a fresh-process entry/deck check. Linux library
+inclusion does not prove Kaggle/Linux runtime compatibility. The user reported
+a successful Kaggle run of an older Abomasnow snapshot.
 
-Open `ipynb/abomasnow_kyogre.ipynb`, attach the competition dataset in Kaggle,
-and Run All. The notebook embeds the Python sources, locates the supplied SDK,
-runs a configurable benchmark and builds a Linux `submission.tar.gz` under
-`/kaggle/working/abomasnow-kyogre/`. It requires no separate repository upload.
+## Run locally
 
-The latest notebook was checked by executing all nine Python code cells locally
-with a four-game smoke run. The user previously reported a successful Kaggle run
-of an older snapshot; the latest immunity patch has not been directly tested in
-Kaggle. Regenerate the notebook after changing its source modules, then import
-the regenerated file into Kaggle to update the embedded source snapshot:
+From `C:\Users\natan\kaggle-pokemon` with Python 3.10 or newer:
 
 ```powershell
-python -X utf8 tools/build_notebook.py
-```
+# New deck and pilot against our existing Abomasnow deck and pilot.
+python -X utf8 -m pokemon_agent.runner --agent alakazam --opponent abomasnow --games 100
 
-`.gitignore` excludes the graph, notes/history, raw snapshots, downloaded data,
-caches, local environments, benchmark results and the notebook's generated
-workspace. The notebook itself and reusable Python sources are versioned.
+# Same Alakazam deck on both sides, with a random opponent policy.
+python -X utf8 -m pokemon_agent.runner --agent alakazam --opponent random --games 40
 
-## Run
+# Original default: Abomasnow versus random, using the Abomasnow deck.
+python -X utf8 -m pokemon_agent.runner --games 100
 
-From `C:\Users\natan\kaggle-pokemon` in PowerShell:
-
-```powershell
-python -X utf8 -m pokemon_agent.runner --games 100 --output results/my-run.json
 python -X utf8 -m unittest discover -s tests -v
 ```
 
-Use Python 3.10 or newer and keep the downloaded competition folder in place.
-The agent/runner use the standard library and the supplied `cg` package; Graphify
-is only needed to maintain project memory. The Windows native library has been
-tested locally. Linux/macOS loading is supported by the vendor SDK but has not
-been validated in this task.
+Keep the downloaded competition folder in place. The playing agent and runner
+use the standard library and supplied `cg` SDK; Graphify is only for project
+memory. Named pilots use their matching decks; a random opponent uses the
+candidate's deck unless `--opponent-deck path.csv` is supplied. Explicit
+`--agent-deck` overrides are also supported, but a pilot is specialized for its
+own deck and is not automatically competent with arbitrary cards.
 
-The default opponent uses the sample policy's algorithm: uniformly sample exactly
-`maxCount` distinct legal option indices. Both sides use the same 60-card deck.
-The unit suite checks the baseline against the supplied implementation.
-
-Every group of four games covers both agent seats and both starting orders. The
+Every group of four games covers both agent seats and starting orders. The
 runner controls the initial first/second choice for that balance; other choices
 come from the selected policies. An incomplete group is reported as played.
-These are **independent single games**, not the deployed Kaggle BO3 match format.
+Each game runs in an isolated process. Illegal selections, policy exceptions,
+native failures, decision limits and timeouts remain errors and produce a
+nonzero batch exit status. The one-second decision limit and 30-second game
+limit are local guards, not verified competition limits.
 
-Useful variants:
-
-```powershell
-# Random-versus-random sanity check.
-python -X utf8 -m pokemon_agent.runner --agent random --opponent random --games 40
-
-# Save visible observations and choices for debugging.
-python -X utf8 -m pokemon_agent.runner --games 4 --trace-dir results/traces-new
-
-# Choose policy RNG seeds and local safety limits.
-python -X utf8 -m pokemon_agent.runner --games 20 --seed 73 --game-timeout 30 --decision-timeout 1 --max-decisions 5000
-```
-
-Each game runs in a separate process. The parent kills workers exceeding the
-game deadline; selection count, index and uniqueness checks run before each
-native step. Policy exceptions, native failures, timeouts and decision limits
-remain failures in the output and produce a nonzero batch exit status.
-The one-second decision deadline is a local evaluation guard, not a claim about
-the competition's per-decision limit. A stuck decision is ultimately bounded by
-the outer game deadline.
-
-The seed controls **policy randomness only**. The supplied native battle API
-does not expose a shuffle/coin seed, so repeated commands do not reproduce exact
-deals. Optional traces preserve observations and actions for inspection, not a
-deterministic engine replay. Trace folders and result files must be new; existing
-results are not overwritten.
+The `--seed` controls policy randomness only. The native battle API does not
+expose a shuffle/coin seed, so identical commands need not reproduce deals.
+Use `--trace-dir results/new-traces` to save visible positions and choices, or
+`--output results/new-run.json` for a chosen report path. Existing results and
+trace folders are not overwritten. Traces are not deterministic engine replays.
 
 ## Files and behavior
 
-- `main.py`: competition-style `agent(obs_dict)` entry point; returns the deck
-  on initialization and legal option indices afterward.
-- `deck.csv`: exact supplied 60-card list, including 35 Basic Water Energy.
-- `pokemon_agent/policy.py`: setups, evolution, attachments, supporters, card
-  choices, attack selection and retreat. Estimates Hammer-lanche over unknown
-  own deck/prizes using visible counts, avoids avoidable deck-out and uses
-  Kyogre to recycle discarded Energy. Recognizes Sylveon/Crustle protection from
-  ex attacks for this fixed deck. On `improvement-1`, delays an unpowered benched
-  Mega when the opponent needs three or fewer Prizes, and prepares Kyogre when
-  a powered Mega faces lethal Alakazam counters. It never reads the opaque
-  search payload or spectator hands/deck order.
-- `pokemon_agent/runner.py`: process isolation, balanced starts, result capture,
-  error handling, code/native-library hashes and a 95% Wilson win-rate interval.
-- `tests/test_agent.py`: policy regressions, baseline equivalence, selection
-  guards, native lifecycle, starting-order and result-accounting tests.
-- `pokemon_agent/sdk.py`: finds the supplied native SDK, loads card metadata,
-  reads the deck and validates returned option indices.
-- `tools/build_notebook.py`: generates the portable notebook from current source.
-- `tools/graph_memory.py`: records and queries local project memory; it is not
-  called by the game-playing agent.
-- `tools/analyze_replays.py`: checks full Kaggle replays, resolves our seat from
-  the player name, summarizes each BO3 round and compares recorded choices with
-  the current policy. An action in `steps[t]` answers `steps[t-1]`'s ACTIVE
-  observation. Agent execution logs are rejected because they lack gameplay.
-- `tests/fixtures/replay_positions.json`: three small agent-visible positions
-  from the Alakazam match. Spectator state, output logs and opaque search data
-  are excluded. These support regression tests without downloading raw replays.
-- `ipynb/abomasnow_kyogre.ipynb`: Kaggle entry notebook with embedded source,
-  local evaluation and archive creation.
+- `main.py`, `deck.csv`: unchanged Abomasnow competition entry and supplied list.
+- `main_alakazam.py`: Alakazam entry; its notebook packages this file as `main.py`.
+- `decks/alakazam.csv`: new list of 60 native card IDs, including eight Basics.
+- `pokemon_agent/alakazam.py`: Alakazam hand-building strategy. Reuses visible
+  card resolution, legal-choice dispatch and typed Energy checks from the base
+  class while overriding attack, search, attachment and action priorities.
+- `pokemon_agent/agents.py`: factory mapping policy names to pilots and decks.
+- `pokemon_agent/policy.py`: Abomasnow setup, Water attachment, Hammer-lanche
+  estimates, Frost Barrier, Kyogre recovery and the replay fixes described below.
+  Neither pilot reads opaque search input or spectator hands/deck order.
+- `pokemon_agent/runner.py`: balanced starts, process/deadline guards, game
+  accounting, source hashes and 95% Wilson win-rate intervals.
+- `pokemon_agent/sdk.py`: supplied SDK discovery, card metadata, deck loading
+  and selection validation.
+- `tests/test_agent.py`, `tests/test_alakazam.py`: baseline and new-pilot
+  regressions, legality, native lifecycle, starting-order and accounting checks.
+- `tools/build_notebook.py`: generates either self-contained Kaggle notebook.
+- `tools/analyze_replays.py`: checks full Kaggle replays, identifies our seat,
+  summarizes each BO3 round and compares recorded choices with a selected pilot
+  (`--policy abomasnow` by default; `--policy alakazam` also available). An action
+  in `steps[t]` answers `steps[t-1]`'s ACTIVE observation. Timing-only agent logs
+  are rejected because they contain no gameplay.
+- `tests/fixtures/replay_positions.json`, `tests/test_replay_analysis.py`:
+  sanitized visible replay positions and replay-parser regression checks.
+- `tools/graph_memory.py`: records and queries local memory; absent from the
+  playing agent and submission archives.
 
-The baseline passed 16 automated tests on 2026-10-20 before the improvement branch
-was created. A local pass verifies those checks; it does not establish stronger
-play on the competition ladder.
+These are deck-specific heuristics. They do not model every opposing ability,
+temporary effect or special Energy. Neither uses neural training or tree search.
+The next useful evidence is BO3 play and full ladder replays against competent,
+varied opponents, especially hand disruption and bench-pressure decks.
 
-The policy is specific to this deck. Damage estimates are heuristics and do not
-model every opposing ability, temporary effect or special Energy. It is not a
-general optimal policy, an MCTS implementation or a trained model. A strong
-result against random play establishes a baseline; stronger opponents and BO3
-evaluation are still required.
+`.gitignore` already covers `graphify-out/`, `notes/`, `raw/`, `match-data/`,
+downloaded data, caches, results, submission archives and `ipynb/work/`. New code,
+the deck list, README and cleared notebooks remain versioned. No extra ignore
+pattern is needed for this experiment.
 
 ## Improvement 1: analysis of both matches
 

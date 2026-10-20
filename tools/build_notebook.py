@@ -4,6 +4,7 @@ Run from the project root: python -X utf8 tools/build_notebook.py
 The notebook embeds a snapshot so importing it into Kaggle needs only the
 competition data attachment, not another upload of this repository.
 """
+import argparse
 import hashlib
 import json
 from pathlib import Path
@@ -20,8 +21,13 @@ def cell(kind, source):
     return result
 
 
-def build():
-    cells = [cell("markdown", """# Abomasnow / Kyogre: local and Kaggle baseline
+def build(agent="abomasnow"):
+    if agent not in ("abomasnow", "alakazam"):
+        raise ValueError(f"Unknown notebook pilot: {agent}")
+    folder = "alakazam" if agent == "alakazam" else "abomasnow-kyogre"
+    title = "Alakazam / Dudunsparce experiment" if agent == "alakazam" else "Abomasnow / Kyogre baseline"
+    output = ROOT / "ipynb/alakazam.ipynb" if agent == "alakazam" else OUTPUT
+    cells = [cell("markdown", f"""# {title}
 
 Attach **the-pokemon-company-ptcg-ai-battle-challenge-playground** in Kaggle's
 Add Input panel, then Run All. No pip installs or network access are required.
@@ -44,6 +50,8 @@ import tarfile
 from datetime import datetime, timezone
 
 GAMES = 20              # Use 100 or more for a larger evaluation.
+AGENT = "__PILOT__"
+OPPONENT = "__OPPONENT__"  # random uses the candidate deck; named pilots use their own.
 POLICY_SEED = 20261017
 SDK_ROOT = None         # Optional explicit path to the folder containing cg/.
 
@@ -51,7 +59,7 @@ local_root = Path.cwd().resolve()
 if local_root.name == "ipynb":
     local_root = local_root.parent
 on_kaggle = Path("/kaggle/working").is_dir()
-WORK_DIR = Path("/kaggle/working/abomasnow-kyogre") if on_kaggle else local_root / "ipynb/work"
+WORK_DIR = Path("/kaggle/working/abomasnow-kyogre") if on_kaggle else local_root / "ipynb/work/abomasnow-kyogre"
 WORK_DIR.mkdir(parents=True, exist_ok=True)
 
 if SDK_ROOT is None:
@@ -66,11 +74,16 @@ if not (SDK_ROOT / "cg/api.py").is_file():
 shutil.copytree(SDK_ROOT / "cg", WORK_DIR / "cg", dirs_exist_ok=True,
                 ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
 print(f"Workspace: {WORK_DIR}\\nSDK: {SDK_ROOT}")
-""")]
-    sources = ["pokemon_agent/__init__.py", "pokemon_agent/sdk.py", "pokemon_agent/policy.py",
-               "pokemon_agent/runner.py", "main.py", "deck.csv"]
-    for relative in sources:
-        source = (ROOT / relative).read_text(encoding="utf-8")
+""".replace("abomasnow-kyogre", folder).replace("__PILOT__", agent)
+       .replace("__OPPONENT__", "abomasnow" if agent == "alakazam" else "random"))]
+    common = ["pokemon_agent/__init__.py", "pokemon_agent/sdk.py", "pokemon_agent/policy.py",
+              "pokemon_agent/alakazam.py", "pokemon_agent/agents.py", "pokemon_agent/runner.py"]
+    sources = [(name, name) for name in common] + [
+        ("main_alakazam.py" if agent == "alakazam" else "main.py", "main.py"),
+        ("decks/alakazam.csv" if agent == "alakazam" else "deck.csv", "deck.csv"),
+        ("deck.csv", "decks/abomasnow.csv"), ("decks/alakazam.csv", "decks/alakazam.csv")]
+    for source_path, relative in sources:
+        source = (ROOT / source_path).read_text(encoding="utf-8")
         # A JSON-encoded string is also a valid Python string literal. This
         # avoids magic commands and handles quotes/backslashes in source safely.
         # The visible implementation is a multiline literal when safe to use.
@@ -81,15 +94,17 @@ print(f"Workspace: {WORK_DIR}\\nSDK: {SDK_ROOT}")
                 "destination.parent.mkdir(parents=True, exist_ok=True)\n"
                 "destination.write_text(source, encoding='utf-8', newline='\\n')\n")
         cells.append(cell("code", code))
-    cells += [cell("markdown", """## Evaluate against the supplied random-policy algorithm
+    cells += [cell("markdown", """## Evaluate the selected pilots and decks
 
-Both players use the same deck. Failed games are reported separately and never
-counted as wins. Results include a confidence interval and seat/start-order
+Random uses the candidate deck; a named opponent uses its own deck. Failed games
+are reported separately and never counted as wins. These are independent single
+games, not Kaggle BO3 matches. Results include a confidence interval and seat/start-order
 splits. The local game and decision deadlines below are safety guards, not
 verified competition limits.
 """), cell("code", """stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
 REPORT_PATH = WORK_DIR / "results" / f"notebook-{stamp}.json"
 command = [sys.executable, "-X", "utf8", "-m", "pokemon_agent.runner",
+           "--agent", AGENT, "--opponent", OPPONENT,
            "--games", str(GAMES), "--seed", str(POLICY_SEED),
            "--game-timeout", "30", "--decision-timeout", "1",
            "--output", str(REPORT_PATH)]
@@ -108,6 +123,7 @@ if not linux_library.is_file():
 members = [WORK_DIR / "main.py", WORK_DIR / "deck.csv", linux_library]
 members += sorted((WORK_DIR / "pokemon_agent").glob("*.py"))
 members += sorted((WORK_DIR / "cg").glob("*.py"))
+members += sorted((WORK_DIR / "decks").glob("*.csv"))
 ARCHIVE_PATH = WORK_DIR / "submission.tar.gz"
 with tarfile.open(ARCHIVE_PATH, "w:gz") as archive:
     for path in members:
@@ -119,11 +135,13 @@ print(f"Benchmark report: {REPORT_PATH}")
                 "metadata": {"kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"},
                              "language_info": {"name": "python", "version": "3.10"}},
                 "nbformat": 4, "nbformat_minor": 5}
-    OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT.write_text(json.dumps(notebook, ensure_ascii=False, indent=1) + "\n", encoding="utf-8", newline="\n")
-    print(f"Wrote {OUTPUT}: {len(cells)} cells, no saved outputs")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(notebook, ensure_ascii=False, indent=1) + "\n", encoding="utf-8", newline="\n")
+    print(f"Wrote {output}: {len(cells)} cells, no saved outputs")
     return notebook
 
 
 if __name__ == "__main__":
-    build()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--agent", choices=("abomasnow", "alakazam"), default="abomasnow")
+    build(parser.parse_args().agent)

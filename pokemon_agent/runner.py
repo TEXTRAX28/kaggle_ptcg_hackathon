@@ -17,12 +17,12 @@ import sys
 import time
 import traceback
 
-from .sdk import DEFAULT_DECK, ROOT, load_sdk, read_deck, validate_selection
+from .sdk import ROOT, load_sdk, read_deck, validate_selection
 
 
 def play_game(config, policies=None):
     """Play to an engine result, rejecting illegal output and bounding decisions."""
-    from .policy import AbomasnowAgent, RandomAgent
+    from .agents import create_agent
 
     api, game = load_sdk()
     seat = config["agent_seat"]
@@ -31,8 +31,7 @@ def play_game(config, policies=None):
     if policies is None:
         policies = [None, None]
         for player, name in ((seat, config["agent"]), (1 - seat, config["opponent"])):
-            policies[player] = (AbomasnowAgent(decks[player]) if name == "abomasnow"
-                                else RandomAgent(decks[player], config["policy_seed"] + player))
+            policies[player] = create_agent(name, decks[player], config["policy_seed"] + player)
     result = {"game": config["game"], "agent_seat": seat, "policy_seed": config["policy_seed"],
               "scheduled_first_player": config["first_player"], "status": "error",
               "decisions": [0, 0], "policy_seconds": [0.0, 0.0],
@@ -184,7 +183,10 @@ def fingerprint():
     import importlib
     load_sdk()
     sim = importlib.import_module("cg.sim")
-    files = [ROOT / "main.py", *sorted((ROOT / "pokemon_agent").glob("*.py")), Path(sim.lib_path)]
+    files = [ROOT / "main.py", ROOT / "deck.csv", *sorted((ROOT / "pokemon_agent").glob("*.py")),
+             *sorted((ROOT / "decks").glob("*.csv")), Path(sim.lib_path)]
+    if (ROOT / "main_alakazam.py").is_file():
+        files.append(ROOT / "main_alakazam.py")
     return {str(p.relative_to(ROOT)).replace("\\", "/"): hashlib.sha256(p.read_bytes()).hexdigest() for p in files}
 
 
@@ -196,12 +198,13 @@ def save_report(path, report):
 
 
 def main():
+    from .agents import AGENT_NAMES, default_deck
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--games", type=int, default=20)
-    parser.add_argument("--agent", choices=["abomasnow", "random"], default="abomasnow")
-    parser.add_argument("--opponent", choices=["abomasnow", "random"], default="random")
-    parser.add_argument("--agent-deck", type=Path, default=DEFAULT_DECK)
-    parser.add_argument("--opponent-deck", type=Path, default=DEFAULT_DECK)
+    parser.add_argument("--agent", choices=AGENT_NAMES, default="abomasnow")
+    parser.add_argument("--opponent", choices=AGENT_NAMES, default="random")
+    parser.add_argument("--agent-deck", type=Path, default=None)
+    parser.add_argument("--opponent-deck", type=Path, default=None)
     parser.add_argument("--seed", type=int, default=42, help="Policy RNG seed; native deals remain unseeded")
     parser.add_argument("--game-timeout", type=float, default=30)
     parser.add_argument("--decision-timeout", type=float, default=1)
@@ -219,7 +222,9 @@ def main():
     output = args.output or ROOT / "results" / f"{now:%Y%m%dT%H%M%S%fZ}-{args.agent}-vs-{args.opponent}.json"
     if output.exists():
         parser.error(f"Refusing to overwrite existing results: {output}")
-    deck, opponent_deck = read_deck(args.agent_deck), read_deck(args.opponent_deck)
+    deck = read_deck(args.agent_deck) if args.agent_deck else default_deck(args.agent)
+    opponent_deck = (read_deck(args.opponent_deck) if args.opponent_deck else
+                     list(deck) if args.opponent == "random" else default_deck(args.opponent))
     report = {"schema_version": 1, "started_utc": now.isoformat(), "run_status": "running",
               "agent": args.agent, "opponent": args.opponent, "requested_games": args.games,
               "agent_deck": deck, "opponent_deck": opponent_deck, "policy_seed": args.seed,

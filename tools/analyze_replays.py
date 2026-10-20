@@ -116,6 +116,7 @@ def analyze(path, player, agent=None):
             "recorded_calls_including_deck": len(calls), "contexts": dict(contexts),
             "rounds": list(rounds.values()), "main_decisions": main_decisions,
             "compared_with_current_policy": compare, "policy_changes_on_recorded_positions": changes,
+            "comparison_policy": type(agent).__name__,
             "opponent_deck": dict(Counter(agent.cards[cid].name for cid in data["steps"][1][1-seat]["action"])),
             "limitations": ["Changed choices are offline position checks, not replayed wins.",
                             "No submitted source fingerprint is included in the replay.",
@@ -123,14 +124,16 @@ def analyze(path, player, agent=None):
 
 
 def main():
+    from pokemon_agent.agents import create_agent
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("files", nargs="+", type=Path)
     parser.add_argument("--player", required=True)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--policy", choices=("abomasnow", "alakazam"), default="abomasnow")
     args = parser.parse_args()
     if args.output.exists():
         parser.error("Output already exists; choose a new report path")
-    reports = [analyze(path, args.player) for path in args.files]
+    reports = [analyze(path, args.player, create_agent(args.policy)) for path in args.files]
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(reports, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     for report in reports:
