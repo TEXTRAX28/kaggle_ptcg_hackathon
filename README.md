@@ -61,7 +61,7 @@ Results on 2026-10-20, using the frozen candidate source:
 | `improvement-1` Abomasnow deck and unchanged pilot | **85 wins / 15 losses** | 100 completed games; 95% Wilson interval 76.7–90.7%; no errors |
 | Random policy using the same Alakazam deck | **40 wins / 0 losses** | 40 completed games; interval 91.2–100%; no errors |
 | Unit/integration suite | **36 passed** | Existing guards plus Alakazam legality, counter math, Psychic costs, hand preservation and entry/deck checks |
-| Both generated notebooks | All 13 code cells each executed locally | Four-game smoke runs: Alakazam 2W/2L vs Abomasnow; Abomasnow 4W/0L vs random; no errors |
+| Initial notebooks, before the setup fix | All 13 code cells each executed locally | Four-game smoke runs: Alakazam 2W/2L vs Abomasnow; Abomasnow 4W/0L vs random; no errors |
 | Both submission archives | Entry, deck and ten source members checked | Correct distinct decks, Linux library included, saved notebook outputs empty |
 
 The 100-game result has 50 games in each seat and starting order: 46/50 wins in
@@ -106,10 +106,30 @@ python -X utf8 tools/build_notebook.py --agent alakazam
 python -X utf8 tools/build_notebook.py --agent abomasnow
 ```
 
-Both current notebooks were executed on Windows, including benchmark subprocesses,
-archive content checks and a fresh-process entry/deck check. Linux library
-inclusion does not prove Kaggle/Linux runtime compatibility. The user reported
+Both current notebooks have **seven cells, including four code cells**. All code
+cells were executed on Windows, including benchmark subprocesses, archive
+content checks and a fresh-process entry/deck check. Linux library inclusion
+does not prove Kaggle/Linux runtime compatibility. The user reported
 a successful Kaggle run of an older Abomasnow snapshot.
+
+The 2026-10-20 setup fix addresses `No module named 'pokemon_agent.sdk'` before
+a benchmark starts. The earlier notebook wrote each file in its own cell;
+omitting the SDK cell reproduces that exact traceback. This does not establish
+which cells ran in the user's Kaggle session.
+
+The new agent-file setup cell embeds and writes all ten project files together.
+Evaluation and archive creation call `prepare_workspace()` again to restore
+missing files. Running either step before setup gives a clear Run All instruction.
+After importing an updated notebook into Kaggle, restart the session and **Run All**.
+Look for `Prepared 10 agent files, including pokemon_agent/sdk.py` before games.
+
+The suite now passes **38 tests**, including fresh-process import recovery after
+deleting the helper and clear failure for out-of-order evaluation/packaging.
+Both full notebooks also passed four local games each after SDK deletion
+(Alakazam 2W/2L, Abomasnow 4W/0L), with no execution errors. Sources, selected
+entry/deck and Linux library were checked in each archive. See
+`results/2026-10-20-notebook-sdk-setup-fix-verification.json`; these checks
+do not establish that the updated notebook has run successfully in Kaggle.
 
 ## Run locally
 

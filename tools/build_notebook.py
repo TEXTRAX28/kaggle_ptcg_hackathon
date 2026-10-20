@@ -34,6 +34,9 @@ Add Input panel, then Run All. No pip installs or network access are required.
 The notebook contains the Python agent and runner, locates the attached native
 SDK, tests against random play and writes a `submission.tar.gz` artifact.
 
+Run the agent-file setup cell before evaluation. It writes every required
+module together; evaluation and packaging refresh those files automatically.
+
 Generated from the project's tested Python modules with
 `python -X utf8 tools/build_notebook.py`. Change the Python sources and regenerate
 to keep the notebook synchronized. Saved outputs are intentionally cleared.
@@ -82,18 +85,24 @@ print(f"Workspace: {WORK_DIR}\\nSDK: {SDK_ROOT}")
         ("main_alakazam.py" if agent == "alakazam" else "main.py", "main.py"),
         ("decks/alakazam.csv" if agent == "alakazam" else "deck.csv", "deck.csv"),
         ("deck.csv", "decks/abomasnow.csv"), ("decks/alakazam.csv", "decks/alakazam.csv")]
+    embedded = []
     for source_path, relative in sources:
         source = (ROOT / source_path).read_text(encoding="utf-8")
         # A JSON-encoded string is also a valid Python string literal. This
         # avoids magic commands and handles quotes/backslashes in source safely.
         # The visible implementation is a multiline literal when safe to use.
         literal = "r'''" + source + "'''" if "'''" not in source else json.dumps(source, ensure_ascii=False)
-        code = (f"# Materialize {relative}\n"
-                f"source = {literal}\n"
-                f"destination = WORK_DIR / {relative!r}\n"
-                "destination.parent.mkdir(parents=True, exist_ok=True)\n"
-                "destination.write_text(source, encoding='utf-8', newline='\\n')\n")
-        cells.append(cell("code", code))
+        embedded.append(f"    {relative!r}: {literal},")
+    setup = ("# Set up all agent files together; run this cell before evaluation.\n"
+             "PROJECT_SOURCES = {\n" + "\n".join(embedded) + "\n}\n\n"
+             "def prepare_workspace():\n"
+             "    for relative, source in PROJECT_SOURCES.items():\n"
+             "        destination = WORK_DIR / relative\n"
+             "        destination.parent.mkdir(parents=True, exist_ok=True)\n"
+             "        destination.write_text(source, encoding='utf-8', newline='\\n')\n\n"
+             "prepare_workspace()\n"
+             "print(f'Prepared {len(PROJECT_SOURCES)} agent files, including pokemon_agent/sdk.py')\n")
+    cells.append(cell("code", setup))
     cells += [cell("markdown", """## Evaluate the selected pilots and decks
 
 Random uses the candidate deck; a named opponent uses its own deck. Failed games
@@ -101,7 +110,10 @@ are reported separately and never counted as wins. These are independent single
 games, not Kaggle BO3 matches. Results include a confidence interval and seat/start-order
 splits. The local game and decision deadlines below are safety guards, not
 verified competition limits.
-"""), cell("code", """stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+"""), cell("code", """if "prepare_workspace" not in globals():
+    raise RuntimeError("Run the agent-file setup cell above first, or choose Run All.")
+prepare_workspace()
+stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
 REPORT_PATH = WORK_DIR / "results" / f"notebook-{stamp}.json"
 command = [sys.executable, "-X", "utf8", "-m", "pokemon_agent.runner",
            "--agent", AGENT, "--opponent", OPPONENT,
@@ -117,7 +129,10 @@ The archive places `main.py` and `deck.csv` at its root and includes the Python
 modules and supplied x86-64 Linux engine. Building this file does not submit it.
 Validate it in the actual Kaggle runtime before uploading; local Windows tests
 do not establish Linux runtime compatibility.
-"""), cell("code", """linux_library = WORK_DIR / "cg/libcg.so"
+"""), cell("code", """if "prepare_workspace" not in globals():
+    raise RuntimeError("Run the agent-file setup cell above first, or choose Run All.")
+prepare_workspace()
+linux_library = WORK_DIR / "cg/libcg.so"
 if not linux_library.is_file():
     raise FileNotFoundError("The supplied x86-64 Linux library cg/libcg.so is missing")
 members = [WORK_DIR / "main.py", WORK_DIR / "deck.csv", linux_library]
