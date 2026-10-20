@@ -1,6 +1,7 @@
 """Behavioral checks for the pilot and failures that could corrupt evaluation."""
 import copy
 import importlib.util
+import json
 import random
 from pathlib import Path
 import tempfile
@@ -141,6 +142,65 @@ class PilotTests(unittest.TestCase):
             path.write_text("3\n" * 61, encoding="utf-8")
             with self.assertRaises(ValueError):
                 read_deck(path)
+
+
+class ReplayRegressionTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.agent = AbomasnowAgent()
+        cls.positions = json.loads((Path(__file__).parent / "fixtures/replay_positions.json").read_text())
+
+    def position(self, name):
+        return copy.deepcopy(self.positions[name]["observation"])
+
+    def test_prepare_kyogre_before_damaged_mega_is_knocked_out(self):
+        obs = self.position("prepare_kyogre")
+        option = obs["select"]["option"][self.agent(obs)[0]]
+        self.assertEqual(option["type"], self.agent.O.ATTACH)
+        self.assertEqual(self.agent.target(obs, option)["id"], 721)
+
+    def test_keep_energy_for_the_current_attack_under_counter_pressure(self):
+        obs = self.position("enable_current_attack")
+        option = obs["select"]["option"][self.agent(obs)[0]]
+        self.assertEqual(option["type"], self.agent.O.ATTACH)
+        self.assertEqual(self.agent.target(obs, option)["serial"], 71)
+
+    def test_defer_unpowered_bench_mega_when_opponent_needs_two_prizes(self):
+        obs = self.position("defer_bench_mega")
+        option = obs["select"]["option"][self.agent(obs)[0]]
+        self.assertEqual(option["type"], self.agent.O.ATTACH)
+        self.assertEqual(self.agent.target(obs, option)["id"], 721)
+        evolve = next(o for o in obs["select"]["option"] if o["type"] == self.agent.O.EVOLVE)
+        self.assertLess(self.agent.main_score(obs, evolve), 0)
+
+    def test_evolution_still_protects_active_snover_and_readies_powered_bench(self):
+        obs = self.position("defer_bench_mega")
+        me, _ = self.agent.players(obs)
+        evolve = next(o for o in obs["select"]["option"] if o["type"] == self.agent.O.EVOLVE)
+        me["bench"][0]["energies"] = [3, 3]
+        self.assertGreater(self.agent.main_score(obs, evolve), 1000)
+        me["active"], me["bench"] = me["bench"], me["active"]
+        me["active"][0]["energies"] = []
+        evolve["inPlayArea"] = self.agent.A.ACTIVE
+        self.assertGreater(self.agent.main_score(obs, evolve), 1000)
+
+    def test_backup_priority_uses_public_threat_not_hidden_payload(self):
+        obs = self.position("prepare_kyogre")
+        _, opponent = self.agent.players(obs)
+        opponent["handCount"] = 0
+        option = obs["select"]["option"][self.agent(obs)[0]]
+        self.assertEqual(self.agent.target(obs, option)["id"], 722)
+        obs["search_begin_input"] = "unreadable hidden data"
+        opponent["hand"] = [card(3, 9000 + i, owner=0) for i in range(30)]
+        self.assertEqual(self.agent(obs), [obs["select"]["option"].index(option)])
+
+    def test_winning_attack_precedes_preparing_a_backup(self):
+        obs = self.position("prepare_kyogre")
+        me, opponent = self.agent.players(obs)
+        me["prize"] = [None]
+        opponent["active"][0]["hp"] = 10
+        selected = obs["select"]["option"][self.agent(obs)[0]]
+        self.assertEqual(selected["type"], self.agent.O.ATTACK)
 
 
 class RunnerTests(unittest.TestCase):

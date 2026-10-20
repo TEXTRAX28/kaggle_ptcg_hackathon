@@ -165,9 +165,19 @@ class AbomasnowAgent:
     def energy_priority(self, obs, pokemon):
         if not pokemon:
             return -100
-        me, _ = self.players(obs)
+        me, opponent = self.players(obs)
         active = bool(me["active"] and pokemon["serial"] == me["active"][0]["serial"])
         count = len(pokemon["energies"])
+        if pokemon["id"] == KYOGRE and not active and count == 0 and me["active"]:
+            front = me["active"][0]
+            # Powerful Hand places counters: Frost Barrier cannot reduce it.
+            # Public handCount estimates the threat; no hidden cards are read.
+            counter_threat = 20 * opponent["handCount"] if any(
+                p["id"] == 743 and p["energies"] for p in self.field(opponent)) else 0
+            if (front["id"] == ABOMASNOW and len(front["energies"]) >= 2
+                    and counter_threat >= front["hp"]):
+                # Do not divert the attachment that enables Hammer-lanche now.
+                return 130  # Prepare a one-Prize Riptide attacker before the KO.
         if pokemon["id"] in (SNOVER, ABOMASNOW):
             needed = 2 if count < 2 else 3
             score = 90 if count < 2 else 35 if count == 2 else -20
@@ -183,7 +193,7 @@ class AbomasnowAgent:
         return score + (35 if active and count < needed else 0) + min(pokemon["hp"], 100) / 100
 
     def main_score(self, obs, option):
-        me, _ = self.players(obs)
+        me, opponent = self.players(obs)
         kind = option["type"]
         hand = Counter(c["id"] for c in me["hand"])
         field = Counter(p["id"] for p in self.field(me))
@@ -192,7 +202,13 @@ class AbomasnowAgent:
         if kind == self.O.END:
             return 0
         if kind == self.O.EVOLVE:
-            return 1100 + self.energy_priority(obs, self.target(obs, option))
+            target = self.target(obs, option)
+            if (option.get("inPlayArea") == self.A.BENCH and len(opponent["prize"]) <= 3
+                    and len(target["energies"]) < 2):
+                # A gust can turn an idle Mega into the opponent's final Prizes.
+                # Attach to Snover first; reconsider evolution once it can attack.
+                return -10
+            return 1100 + self.energy_priority(obs, target)
         if kind == self.O.ATTACH:
             card, target = self.resolve(obs, option), self.target(obs, option)
             if card["id"] == BELT:
