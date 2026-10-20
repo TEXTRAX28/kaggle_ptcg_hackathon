@@ -69,7 +69,13 @@ if SDK_ROOT is None:
     input_root = Path("/kaggle/input") if on_kaggle else local_root / "the-pokemon-company-ptcg-ai-battle-challenge-playground"
     candidates = sorted({p.parent.parent for p in input_root.rglob("cg/api.py")})
     if len(candidates) != 1:
-        raise RuntimeError(f"Expected one supplied cg SDK under {input_root}; found {candidates}. Attach the competition data or set SDK_ROOT explicitly.")
+        attached = sorted(p.name for p in input_root.iterdir()) if input_root.is_dir() else []
+        raise RuntimeError(
+            f"Expected one supplied cg SDK under {input_root}; found {candidates}. "
+            f"Visible input entries: {attached or '<none>'}. "
+            "In Kaggle, use Add Input > Competition Datasets to attach "
+            "The Pokemon Company - PTCG AI Battle Challenge Playground. "
+            "If setting SDK_ROOT explicitly, use the folder containing cg/api.py.")
     SDK_ROOT = candidates[0]
 SDK_ROOT = Path(SDK_ROOT)
 if not (SDK_ROOT / "cg/api.py").is_file():

@@ -9,13 +9,19 @@ submission archive. Archive creation does not upload a submission.
 
 | Branch | Purpose |
 |---|---|
-| `main` at `842c9bb` | Original tested Abomasnow baseline |
-| `improvement-1` at `e226a03` | Abomasnow with the two replay-based policy fixes documented below |
-| `deck-experiment-1` | Separate Alakazam deck, dedicated pilot and notebook |
+| `main` | Combined working branch: replay improvements, both pilots/decks, both notebooks and SDK setup fixes |
+| `improvement-1` at `e226a03` | Retained checkpoint for the replay-based Abomasnow policy fixes |
+| `deck-experiment-1` at `f5ac167` | Retained checkpoint for Alakazam and the notebook module recovery fix |
 
-The original `main.py`, `deck.csv` and `pokemon_agent/policy.py` are unchanged
-from `improvement-1` on this branch. Commit or preserve unfinished work before
-switching branches.
+On 2026-10-20, `git merge --no-edit improvement-1 deck-experiment-1` on `main`
+reported **Already up to date**: both branch histories were already included,
+with no conflicts. The original Abomasnow baseline remains at commit `842c9bb`.
+The root `main.py`, `deck.csv` and `pokemon_agent/policy.py` match
+`improvement-1`; Alakazam has its separate entry and notebook. Continue shared
+work on `main`; the historical branch refs are retained for recovery.
+
+See [HANDOFF.md](HANDOFF.md) for the consolidation, verified results, commands
+and remaining work.
 
 ## Deck experiment 1: Alakazam / Dudunsparce
 
@@ -75,7 +81,8 @@ Abomasnow implementation. It does not isolate the deck's causal contribution,
 establish strength against competent Dragapult/other opponents, or predict a
 Kaggle rating. Local games are independent single games, not BO3 matches. The
 small notebook smoke runs are packaging checks, not additional strength claims.
-The notebook/archive have not been run in Kaggle or submitted in this task.
+At that initial experiment checkpoint, the notebook/archive had not yet been
+run in Kaggle or submitted. The later verified Kaggle run is documented below.
 
 Reports, including source/native-library fingerprints and every game, are kept
 locally under the ignored `results/` directory:
@@ -129,7 +136,32 @@ Both full notebooks also passed four local games each after SDK deletion
 (Alakazam 2W/2L, Abomasnow 4W/0L), with no execution errors. Sources, selected
 entry/deck and Linux library were checked in each archive. See
 `results/2026-10-20-notebook-sdk-setup-fix-verification.json`; these checks
-do not establish that the updated notebook has run successfully in Kaggle.
+were initially Windows-only checks. The Alakazam notebook was subsequently
+verified directly in Kaggle, as described below.
+
+If setup reports no supplied cg SDK under `/kaggle/input`, check the notebook's
+**Input** panel. Use **Add Input → Competition Datasets**, find **The Pokémon
+Company - PTCG AI Battle Challenge Playground**, and add it. Wait for the ready
+notification, then **Run All**. The engine files come from the attached competition
+data; setting `SDK_ROOT` cannot replace missing files. Automatic discovery is
+preferred; an explicit root must be the directory containing `cg/api.py`.
+The notebook's diagnostic now lists visible input entries to make this clearer.
+
+On 2026-10-20, the live PTCG-alakazam notebook showed **No input attached**.
+After attaching the official competition data and running all existing cells,
+the Kaggle/Linux benchmark completed **20 games: 18 wins, 2 losses, no errors**
+against our Abomasnow pilot. All starting-order/seat groups had ten games;
+seat wins were9/10 each, first10/10 and second8/10. This is a notebook benchmark,
+not a ladder result. It generated `/kaggle/working/alakazam/submission.tar.gz`
+(0.52 MiB) and did not submit it to the competition.
+
+Live SDK root was
+`/kaggle/input/competitions/the-pokemon-company-ptcg-ai-battle-challenge-playground/sample_submission/sample_submission/sample_submission`.
+Saved evidence: `results/2026-10-20-kaggle-alakazam-live-verification.json`
+contains the visible output summary, and `results/2026-10-20-kaggle-input-fixed.jpg`
+shows the attached input and generated bundle. This is observed browser output,
+not a downloaded full benchmark report. The additional clearer error text was
+tested locally with empty and unrelated input folders;38 tests still pass.
 
 ## Run locally
 
