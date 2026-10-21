@@ -72,10 +72,15 @@ final reply record documents the reply text, not independently confirmed deliver
 ## Git hygiene and notebooks
 
 - Keep `graphify-out/`, `notes/`, `raw/`, caches, downloaded competition data,
-  benchmark outputs and `ipynb/work/` excluded through `.gitignore`. These are
+  benchmark outputs, `build/` and legacy `ipynb/work/` excluded through `.gitignore`. These are
   local working artifacts; do not force-add them without an explicit request.
-- Put the Kaggle notebook under `ipynb/`. The current notebook is generated from
+- Group each deck's notebook, entry, policy, list and strategy tests under
+  `decks/<deck-name>/`. Keep shared runtime in `pokemon_agent/` and generated
+  notebook workspaces under ignored `build/notebooks/`. Each notebook is generated from
   the tested Python modules with `python -X utf8 tools/build_notebook.py`.
   Regenerate it after source changes and keep saved notebook outputs cleared.
 - Record local test results honestly; local Windows execution is not proof of
   compatibility with Kaggle's Linux runtime.
+
+- Run all deck-specific and shared tests from the root with
+  `python -X utf8 -m unittest discover -v`; discovery limited to `tests/` omits deck tests.

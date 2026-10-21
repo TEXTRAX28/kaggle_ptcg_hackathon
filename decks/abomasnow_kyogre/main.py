@@ -1,6 +1,6 @@
 """Competition-style Python entry point for the local heuristic agent."""
 from functools import lru_cache
-from pokemon_agent.policy import AbomasnowAgent
+from decks.abomasnow_kyogre.policy import AbomasnowAgent
 
 
 @lru_cache(maxsize=1)

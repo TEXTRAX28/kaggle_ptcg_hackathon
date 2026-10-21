@@ -183,11 +183,11 @@ def fingerprint():
     import importlib
     load_sdk()
     sim = importlib.import_module("cg.sim")
-    files = [ROOT / "main.py", ROOT / "deck.csv", *sorted((ROOT / "pokemon_agent").glob("*.py")),
-             *sorted((ROOT / "decks").glob("*.csv")), Path(sim.lib_path)]
-    if (ROOT / "main_alakazam.py").is_file():
-        files.append(ROOT / "main_alakazam.py")
-    return {str(p.relative_to(ROOT)).replace("\\", "/"): hashlib.sha256(p.read_bytes()).hexdigest() for p in files}
+    files = [*sorted((ROOT / "pokemon_agent").glob("*.py")),
+             *sorted(p for p in (ROOT / "decks").rglob("*.py") if not p.name.startswith("test_")),
+             *sorted((ROOT / "decks").rglob("deck.csv")), Path(sim.lib_path)]
+    files += [p for p in (ROOT / "main.py", ROOT / "deck.csv") if p.is_file()]
+    return {p.relative_to(ROOT).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in files}
 
 
 def save_report(path, report):

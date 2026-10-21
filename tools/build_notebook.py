@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-OUTPUT = ROOT / "ipynb/abomasnow_kyogre.ipynb"
+DECK_FOLDERS = ("abomasnow_kyogre", "alakazam_dudunsparce")
 
 
 def cell(kind, source):
@@ -25,8 +25,9 @@ def build(agent="abomasnow"):
     if agent not in ("abomasnow", "alakazam"):
         raise ValueError(f"Unknown notebook pilot: {agent}")
     folder = "alakazam" if agent == "alakazam" else "abomasnow-kyogre"
+    deck_folder = "alakazam_dudunsparce" if agent == "alakazam" else "abomasnow_kyogre"
     title = "Alakazam / Dudunsparce experiment" if agent == "alakazam" else "Abomasnow / Kyogre baseline"
-    output = ROOT / "ipynb/alakazam.ipynb" if agent == "alakazam" else OUTPUT
+    output = ROOT / "decks" / deck_folder / f"{deck_folder}.ipynb"
     cells = [cell("markdown", f"""# {title}
 
 Attach **the-pokemon-company-ptcg-ai-battle-challenge-playground** in Kaggle's
@@ -59,10 +60,10 @@ POLICY_SEED = 20261017
 SDK_ROOT = None         # Optional explicit path to the folder containing cg/.
 
 local_root = Path.cwd().resolve()
-if local_root.name == "ipynb":
-    local_root = local_root.parent
+local_root = next((p for p in (local_root, *local_root.parents)
+                   if (p / "tools/build_notebook.py").is_file()), local_root)
 on_kaggle = Path("/kaggle/working").is_dir()
-WORK_DIR = Path("/kaggle/working/abomasnow-kyogre") if on_kaggle else local_root / "ipynb/work/abomasnow-kyogre"
+WORK_DIR = Path("/kaggle/working/abomasnow-kyogre") if on_kaggle else local_root / "build/notebooks/__DECK_FOLDER__"
 WORK_DIR.mkdir(parents=True, exist_ok=True)
 
 if SDK_ROOT is None:
@@ -83,14 +84,16 @@ if not (SDK_ROOT / "cg/api.py").is_file():
 shutil.copytree(SDK_ROOT / "cg", WORK_DIR / "cg", dirs_exist_ok=True,
                 ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
 print(f"Workspace: {WORK_DIR}\\nSDK: {SDK_ROOT}")
-""".replace("abomasnow-kyogre", folder).replace("__PILOT__", agent)
+""".replace("abomasnow-kyogre", folder).replace("__DECK_FOLDER__", deck_folder).replace("__PILOT__", agent)
        .replace("__OPPONENT__", "abomasnow" if agent == "alakazam" else "random"))]
-    common = ["pokemon_agent/__init__.py", "pokemon_agent/sdk.py", "pokemon_agent/policy.py",
-              "pokemon_agent/alakazam.py", "pokemon_agent/agents.py", "pokemon_agent/runner.py"]
+    common = ["pokemon_agent/__init__.py", "pokemon_agent/sdk.py", "pokemon_agent/base.py",
+              "pokemon_agent/random_agent.py", "pokemon_agent/agents.py", "pokemon_agent/runner.py",
+              "decks/__init__.py"]
+    common += [f"decks/{name}/{filename}" for name in DECK_FOLDERS
+               for filename in ("__init__.py", "policy.py", "deck.csv")]
     sources = [(name, name) for name in common] + [
-        ("main_alakazam.py" if agent == "alakazam" else "main.py", "main.py"),
-        ("decks/alakazam.csv" if agent == "alakazam" else "deck.csv", "deck.csv"),
-        ("deck.csv", "decks/abomasnow.csv"), ("decks/alakazam.csv", "decks/alakazam.csv")]
+        (f"decks/{deck_folder}/main.py", "main.py"),
+        (f"decks/{deck_folder}/deck.csv", "deck.csv")]
     embedded = []
     for source_path, relative in sources:
         source = (ROOT / source_path).read_text(encoding="utf-8")
@@ -141,10 +144,8 @@ prepare_workspace()
 linux_library = WORK_DIR / "cg/libcg.so"
 if not linux_library.is_file():
     raise FileNotFoundError("The supplied x86-64 Linux library cg/libcg.so is missing")
-members = [WORK_DIR / "main.py", WORK_DIR / "deck.csv", linux_library]
-members += sorted((WORK_DIR / "pokemon_agent").glob("*.py"))
+members = [WORK_DIR / relative for relative in sorted(PROJECT_SOURCES)] + [linux_library]
 members += sorted((WORK_DIR / "cg").glob("*.py"))
-members += sorted((WORK_DIR / "decks").glob("*.csv"))
 ARCHIVE_PATH = WORK_DIR / "submission.tar.gz"
 with tarfile.open(ARCHIVE_PATH, "w:gz") as archive:
     for path in members:

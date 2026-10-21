@@ -1,90 +1,23 @@
-"""Deck-specific heuristic baseline. Uses visible observations, not search state.
+"""Abomasnow/Kyogre heuristic using only visible observations and legal choices.
 
-Scores are preferences, not a complete damage/rules simulator. The engine supplies
-the legal actions. No training or opponent-hand access is involved.
+Scores are preferences, not a complete damage/rules simulator. No training or
+opponent-hand access is involved.
 """
 from collections import Counter
 from math import comb
-import random
 
-from .sdk import load_sdk, metadata, read_deck, validate_selection
+from pokemon_agent.base import BaseAgent
+from pokemon_agent.sdk import read_deck
 
 WATER, KYOGRE, SNOVER, ABOMASNOW = 3, 721, 722, 723
 SIGNAL, BELT, CYRANO, LILLIE, WAITRESS = 1145, 1158, 1205, 1227, 1235
 
 
-class RandomAgent:
-    """The supplied baseline's algorithm: sample exactly maxCount options."""
-
-    def __init__(self, deck=None, seed=0):
-        self.deck = list(deck) if deck is not None else read_deck()
-        self.rng = random.Random(seed)
-
-    def __call__(self, obs):
-        if obs.get("select") is None:
-            return list(self.deck)
-        select = obs["select"]
-        return self.rng.sample(range(len(select["option"])), select["maxCount"])
-
-
-class AbomasnowAgent:
+class AbomasnowAgent(BaseAgent):
     """Set up Abomasnow, preserve useful resources and recycle with Kyogre."""
 
     def __init__(self, deck=None):
-        self.deck = list(deck) if deck is not None else read_deck()
-        self.cards, self.attacks = metadata()
-        api, _ = load_sdk()
-        self.O, self.C, self.A = api.OptionType, api.SelectContext, api.AreaType
-
-    def __call__(self, obs):
-        if obs.get("select") is None:
-            return list(self.deck)
-        select = obs["select"]
-        if not select["option"]:
-            action = []
-        elif select["context"] == self.C.MAIN:
-            action = [max(range(len(select["option"])),
-                          key=lambda i: self.main_score(obs, select["option"][i]))]
-        else:
-            action = self.select_effect(obs)
-        validate_selection(obs, action)
-        return action
-
-    @staticmethod
-    def players(obs):
-        state = obs["current"]
-        return state["players"][state["yourIndex"]], state["players"][1 - state["yourIndex"]]
-
-    @staticmethod
-    def field(player):
-        return [p for p in player["active"] + player["bench"] if p is not None]
-
-    def resolve(self, obs, option):
-        """Resolve only cards exposed in this observation; facedown stays None."""
-        state = obs["current"]
-        player = state["players"][option.get("playerIndex", state["yourIndex"])]
-        area = option.get("area", self.A.HAND if option["type"] == self.O.PLAY else None)
-        index = option.get("index")
-        areas = {self.A.HAND: player["hand"], self.A.DISCARD: player["discard"],
-                 self.A.ACTIVE: player["active"], self.A.BENCH: player["bench"],
-                 self.A.PRIZE: player["prize"], self.A.DECK: obs["select"].get("deck"),
-                 self.A.LOOKING: state.get("looking"), self.A.STADIUM: state["stadium"]}
-        values = areas.get(area)
-        if values is None or index is None or not 0 <= index < len(values):
-            return None
-        card = values[index]
-        if card and option["type"] in (self.O.ENERGY_CARD, self.O.ENERGY):
-            return card["energyCards"][option["energyIndex"]]
-        if card and option["type"] == self.O.TOOL_CARD:
-            return card["tools"][option["toolIndex"]]
-        return card
-
-    def target(self, obs, option):
-        me, _ = self.players(obs)
-        area = option.get("inPlayArea")
-        group = me["active"] if area == self.A.ACTIVE else me["bench"]
-        index = option.get("inPlayIndex")
-        return group[index] if index is not None and index < len(group) else None
+        super().__init__(read_deck() if deck is None else deck)
 
     def water_distribution(self, obs):
         """Marginal draw distribution over unknown deck/prizes, not true order."""
@@ -148,19 +81,6 @@ class AbomasnowAgent:
         elif attack.name == "Swirling Waves":
             score -= 45
         return score if expected > 0 else -1
-
-    def can_pay(self, pokemon, attack_id):
-        available = Counter(pokemon["energies"])
-        costs = self.attacks[attack_id].energies
-        # This fixed deck contains only Basic Water; no special-energy semantics.
-        if len(pokemon["energies"]) < len(costs):
-            return False
-        return all(available[t] >= count for t, count in Counter(costs).items() if t != 0)
-
-    def ready_score(self, obs, pokemon):
-        scores = [self.attack_score(obs, aid, pokemon) for aid in self.cards[pokemon["id"]].attacks
-                  if self.can_pay(pokemon, aid)]
-        return max(scores, default=-10)
 
     def energy_priority(self, obs, pokemon):
         if not pokemon:

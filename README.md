@@ -5,6 +5,67 @@ Mega Abomasnow ex/Kyogre and the new Alakazam/Dudunsparce experiment. Each has a
 Kaggle notebook that embeds its tested sources, runs local games and builds a
 submission archive. Archive creation does not upload a submission.
 
+## Project layout
+
+Everything specific to a deck is grouped under its folder:
+
+```text
+decks/
+  abomasnow_kyogre/
+    main.py                    # This deck's competition entry
+    policy.py                  # This deck's strategy
+    deck.csv                   # This deck's 60 cards
+    abomasnow_kyogre.ipynb      # Generated Kaggle notebook
+    test_policy.py             # Strategy and replay regressions
+    replay_positions.json      # Sanitized regression positions
+  alakazam_dudunsparce/
+    main.py
+    policy.py
+    deck.csv
+    alakazam_dudunsparce.ipynb
+    test_policy.py
+pokemon_agent/                 # Shared runtime and evaluation code
+tools/                         # Shared development utilities
+tests/                         # Shared infrastructure tests and fixtures
+build/                         # Ignored generated workspaces and archives
+```
+
+Each Python package also has an `__init__.py`. There is no maintained root
+`main.py` or root `deck.csv`: packaging selects a deck's entry/list and writes
+those required names inside the submission archive.
+
+Shared code:
+
+| File | Responsibility |
+|---|---|
+| `pokemon_agent/base.py` | Legal-choice dispatch, visible-card lookup, typed Energy checks and attacker readiness |
+| `pokemon_agent/sdk.py` | Native SDK loading, card metadata, deck reading and selection validation |
+| `pokemon_agent/random_agent.py` | Random opponent usable with either deck |
+| `pokemon_agent/agents.py` | Registry selecting the correct pilot and deck |
+| `pokemon_agent/runner.py` | Match isolation, balanced starts, timing, errors and reports |
+| `tools/build_notebook.py` | Generate either notebook and embed the required runtime sources |
+| `tools/analyze_replays.py` | Analyze full replays using a selected pilot |
+| `tools/graph_memory.py` | Maintain private project memory; not included in submissions |
+
+Both policies inherit `BaseAgent`; Alakazam no longer inherits the Abomasnow
+strategy class. Edit a deck's Python sources and regenerate its notebook.
+The generated notebook runs tests and builds the archive; it is not an
+independent second implementation to maintain.
+
+Local notebook output goes under `build/notebooks/<deck-folder>/`. Old local
+notebook workspaces were preserved at `build/legacy-notebook-work-20261020/`.
+They are generated copies and results, not sources to edit. `.gitignore`
+already excludes all of `build/`, private memory, downloaded data and caches.
+
+Layout checks on 2026-10-20: all **38 tests pass** using root discovery; all
+**179 recorded policy decisions match** the pre-move traces; both card lists
+are byte-identical. Both notebooks ran all four code cells from their new
+folders, restored a deliberately deleted SDK helper, completed four games each
+without errors and built checked archives containing 15 project files plus
+the supplied SDK. These are local Windows functionality checks. The reorganized
+notebooks have not been rerun in Kaggle; the earlier live run is documented below.
+Evidence: `results/2026-10-20-deck-layout/verification.json`.
+
 ## Branches
 
 | Branch | Purpose |
@@ -16,9 +77,9 @@ submission archive. Archive creation does not upload a submission.
 On 2026-10-20, `git merge --no-edit improvement-1 deck-experiment-1` on `main`
 reported **Already up to date**: both branch histories were already included,
 with no conflicts. The original Abomasnow baseline remains at commit `842c9bb`.
-The root `main.py`, `deck.csv` and `pokemon_agent/policy.py` match
-`improvement-1`; Alakazam has its separate entry and notebook. Continue shared
-work on `main`; the historical branch refs are retained for recovery.
+The two pilots now live in their own deck folders. Shared mechanics have been
+separated without changing either pilot's strategy. Continue shared work on
+`main`; the historical branch refs are retained for recovery.
 
 See [HANDOFF.md](HANDOFF.md) for the consolidation, verified results, commands
 and remaining work.
@@ -39,7 +100,7 @@ Lillie when it would shrink a large hand, saves a draw reserve and does not
 shuffle away its sole Pokémon with Dudunsparce. It attaches Psychic to the
 Alakazam line; the 60-HP Dunsparce variant is a free-retreat pivot.
 
-The native simulator accepts this 60-card list in `decks/alakazam.csv`:
+The native simulator accepts this 60-card list in `decks/alakazam_dudunsparce/deck.csv`:
 
 | Cards | Copies each | Subtotal |
 |---|---:|---:|
@@ -93,17 +154,17 @@ locally under the ignored `results/` directory:
 
 ## Kaggle notebooks and submission files
 
-Use **`ipynb/alakazam.ipynb`** for the new deck. Attach the competition dataset
+Use **`decks/alakazam_dudunsparce/alakazam_dudunsparce.ipynb`** for the new deck. Attach the competition dataset
 in Kaggle's Add Input panel and Run All. The default benchmark tests Alakazam
 against Abomasnow. Its output archive is:
 
 `/kaggle/working/alakazam/submission.tar.gz`
 
-`ipynb/abomasnow_kyogre.ipynb` still builds Abomasnow at
+`decks/abomasnow_kyogre/abomasnow_kyogre.ipynb` still builds Abomasnow at
 `/kaggle/working/abomasnow-kyogre/submission.tar.gz`. Both notebooks materialize
 their own `main.py` and `deck.csv` and keep named deck copies so the opponent
 gets its correct list. Locally their generated workspaces are respectively
-`ipynb/work/alakazam/` and `ipynb/work/abomasnow-kyogre/`.
+`build/notebooks/alakazam_dudunsparce/` and `build/notebooks/abomasnow_kyogre/`.
 
 Regenerate embedded snapshots after source changes, then import the regenerated
 notebook into Kaggle. An existing Kaggle copy does not update automatically:
@@ -124,11 +185,11 @@ a benchmark starts. The earlier notebook wrote each file in its own cell;
 omitting the SDK cell reproduces that exact traceback. This does not establish
 which cells ran in the user's Kaggle session.
 
-The new agent-file setup cell embeds and writes all ten project files together.
+The new agent-file setup cell embeds and writes all 15 project files together.
 Evaluation and archive creation call `prepare_workspace()` again to restore
 missing files. Running either step before setup gives a clear Run All instruction.
 After importing an updated notebook into Kaggle, restart the session and **Run All**.
-Look for `Prepared 10 agent files, including pokemon_agent/sdk.py` before games.
+Look for `Prepared 15 agent files, including pokemon_agent/sdk.py` before games.
 
 The suite now passes **38 tests**, including fresh-process import recovery after
 deleting the helper and clear failure for out-of-order evaluation/packaging.
@@ -177,7 +238,7 @@ python -X utf8 -m pokemon_agent.runner --agent alakazam --opponent random --game
 # Original default: Abomasnow versus random, using the Abomasnow deck.
 python -X utf8 -m pokemon_agent.runner --games 100
 
-python -X utf8 -m unittest discover -s tests -v
+python -X utf8 -m unittest discover -v
 ```
 
 Keep the downloaded competition folder in place. The playing agent and runner
@@ -201,44 +262,17 @@ Use `--trace-dir results/new-traces` to save visible positions and choices, or
 `--output results/new-run.json` for a chosen report path. Existing results and
 trace folders are not overwritten. Traces are not deterministic engine replays.
 
-## Files and behavior
+## Playing behavior and scope
 
-- `main.py`, `deck.csv`: unchanged Abomasnow competition entry and supplied list.
-- `main_alakazam.py`: Alakazam entry; its notebook packages this file as `main.py`.
-- `decks/alakazam.csv`: new list of 60 native card IDs, including eight Basics.
-- `pokemon_agent/alakazam.py`: Alakazam hand-building strategy. Reuses visible
-  card resolution, legal-choice dispatch and typed Energy checks from the base
-  class while overriding attack, search, attachment and action priorities.
-- `pokemon_agent/agents.py`: factory mapping policy names to pilots and decks.
-- `pokemon_agent/policy.py`: Abomasnow setup, Water attachment, Hammer-lanche
-  estimates, Frost Barrier, Kyogre recovery and the replay fixes described below.
-  Neither pilot reads opaque search input or spectator hands/deck order.
-- `pokemon_agent/runner.py`: balanced starts, process/deadline guards, game
-  accounting, source hashes and 95% Wilson win-rate intervals.
-- `pokemon_agent/sdk.py`: supplied SDK discovery, card metadata, deck loading
-  and selection validation.
-- `tests/test_agent.py`, `tests/test_alakazam.py`: baseline and new-pilot
-  regressions, legality, native lifecycle, starting-order and accounting checks.
-- `tools/build_notebook.py`: generates either self-contained Kaggle notebook.
-- `tools/analyze_replays.py`: checks full Kaggle replays, identifies our seat,
-  summarizes each BO3 round and compares recorded choices with a selected pilot
-  (`--policy abomasnow` by default; `--policy alakazam` also available). An action
-  in `steps[t]` answers `steps[t-1]`'s ACTIVE observation. Timing-only agent logs
-  are rejected because they contain no gameplay.
-- `tests/fixtures/replay_positions.json`, `tests/test_replay_analysis.py`:
-  sanitized visible replay positions and replay-parser regression checks.
-- `tools/graph_memory.py`: records and queries local memory; absent from the
-  playing agent and submission archives.
+The deck-specific files and shared modules are listed above. Abomasnow handles
+Water setup, attack estimates, recovery and the replay fixes below. Alakazam
+uses its own hand-building strategy and shared observation/selection helpers.
+Neither pilot reads opaque search input or spectator hands/deck order.
 
 These are deck-specific heuristics. They do not model every opposing ability,
 temporary effect or special Energy. Neither uses neural training or tree search.
 The next useful evidence is BO3 play and full ladder replays against competent,
 varied opponents, especially hand disruption and bench-pressure decks.
-
-`.gitignore` already covers `graphify-out/`, `notes/`, `raw/`, `match-data/`,
-downloaded data, caches, results, submission archives and `ipynb/work/`. New code,
-the deck list, README and cleared notebooks remain versioned. No extra ignore
-pattern is needed for this experiment.
 
 ## Improvement 1: analysis of both matches
 

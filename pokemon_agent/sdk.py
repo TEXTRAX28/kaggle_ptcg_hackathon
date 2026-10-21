@@ -7,7 +7,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 SAMPLE = (ROOT / "the-pokemon-company-ptcg-ai-battle-challenge-playground"
           / "sample_submission/sample_submission/sample_submission")
-DEFAULT_DECK = ROOT / "deck.csv"
+DEFAULT_DECK = ROOT / "decks/abomasnow_kyogre/deck.csv"
 
 
 def read_deck(path=DEFAULT_DECK):

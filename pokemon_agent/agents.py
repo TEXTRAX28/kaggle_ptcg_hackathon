@@ -1,18 +1,17 @@
-"""Select a pilot and its matching deck for local comparisons."""
-from .alakazam import AlakazamAgent
-from .policy import AbomasnowAgent, RandomAgent
-from .sdk import ROOT, DEFAULT_DECK, read_deck
+"""Shared registry selecting each deck's pilot and matching card list."""
+from decks.abomasnow_kyogre.policy import AbomasnowAgent
+from decks.alakazam_dudunsparce.policy import AlakazamAgent
+from .random_agent import RandomAgent
+from .sdk import ROOT, read_deck
 
 AGENT_NAMES = ("abomasnow", "alakazam", "random")
 
 
 def default_deck(name):
-    if name == "alakazam":
-        return read_deck(ROOT / "decks/alakazam.csv")
     if name not in AGENT_NAMES:
         raise ValueError(f"Unknown pilot: {name}")
-    packaged = ROOT / "decks/abomasnow.csv"
-    return read_deck(packaged if packaged.is_file() else DEFAULT_DECK)
+    folder = "alakazam_dudunsparce" if name == "alakazam" else "abomasnow_kyogre"
+    return read_deck(ROOT / "decks" / folder / "deck.csv")
 
 
 def create_agent(name, deck=None, seed=0):

@@ -1,21 +1,21 @@
 """One-Prize Alakazam/Dudunsparce pilot using only its legal observation.
 
-Powerful Hand scales with hand size, not discarded Energy. The Abomasnow base
+Powerful Hand scales with hand size, not discarded Energy. The shared base
 supplies selection validation and visible-card resolution; strategy is replaced.
 """
 from collections import Counter
 
-from .policy import AbomasnowAgent
-from .sdk import ROOT, read_deck
+from pokemon_agent.base import BaseAgent
+from pokemon_agent.sdk import ROOT, read_deck
 
 ABRA, KADABRA, ALAKAZAM, DUNSPARCE, DUDUNSPARCE = 741, 742, 743, 65, 66
 PSYCHIC, TELEPATH = 5, 19
 POFFIN, CANDY, PAD, DAWN, HILDA = 1086, 1079, 1152, 1231, 1225
 LILLIE, BOSS, LANA, STRETCHER, CAGE, RED_CARD = 1227, 1182, 1184, 1097, 1264, 1413
-DECK_PATH = ROOT / "decks/alakazam.csv"
+DECK_PATH = ROOT / "decks/alakazam_dudunsparce/deck.csv"
 
 
-class AlakazamAgent(AbomasnowAgent):
+class AlakazamAgent(BaseAgent):
     """Grow a hand through evolution/draw and trade one-Prize attackers."""
 
     def __init__(self, deck=None):

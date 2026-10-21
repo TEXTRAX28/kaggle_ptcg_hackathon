@@ -1,8 +1,72 @@
 # Pokémon TCG project handoff
 
-Updated: 2026-10-20. This repository contains two Python heuristic pilots:
+Updated: 2026-10-22. This repository contains two Python heuristic pilots:
 Mega Abomasnow ex/Kyogre and Alakazam/Dudunsparce. The combined working branch
 is `main`. There is no neural network, BF16 implementation or training pipeline.
+
+## Active replay audit and next implementation
+
+The current request is to audit every one of the 299 steps in episode
+`125168227`, explain the loss, and implement evidence-backed improvements on a
+new branch. The repeated request after context compaction is the same task;
+record it once in project memory. Update this existing handoff as work advances.
+
+The full replay is already downloaded at `match-data/125168227.json` (ignored):
+8,225,947 bytes; SHA256
+`a114769705d8f1b628d2c6dcc5e8d1fc2efa63adb1e4bbec57f96d394c51c12f`.
+Our player is `Natanael Rehuel S`, seat 1, against `masterlincs`; final rewards
+are `[1, -1]`, both statuses DONE. Access verification is saved in
+`results/2026-10-21-episode-125168227-access.json`. Strategic causes and round
+scores still need auditing. Actions at step t answer the ACTIVE observation at
+step t-1. Spectator-only hidden information must never enter policy decisions.
+
+Before implementation, preserve the pending deck-folder reorganization and
+create a separate improvement branch. At this handoff update, HEAD is
+`main` / `bfe80f7`; the layout revision below remains uncommitted, including
+new untracked deck folders and shared helpers. Do not discard these files.
+The next work is a complete step ledger, causal analysis, targeted policy
+regressions, native-game checks, notebook regeneration and incremental Graphify
+refresh. Current Graphify has 301 source nodes, 455 edges and 32 indexed sources;
+all source hashes matched at the start of this task.
+
+The user permits accessing/editing their Kaggle notebook where possible:
+`https://www.kaggle.com/code/natanaelrehuels/ptcg-alakazam/edit/run/360438660`.
+Preserve any cloud draft before replacing it; validate local sources first.
+No competition submission is requested. Local files plus a regenerated notebook
+are the fallback. Assess BF16 separately from opponent/self-play training:
+the current pilot has no neural workload, and lower precision alone is not a
+playing strategy. No training changes have yet been made.
+
+## Current deck layout revision
+
+After consolidation, the user requested grouping all deck-specific files.
+Each folder under `decks/abomasnow_kyogre/` and `decks/alakazam_dudunsparce/`
+now contains its own `main.py`, `policy.py`, `deck.csv`, generated notebook
+and strategy tests. Sanitized Abomasnow replay positions live with that deck.
+Shared runtime code stays in `pokemon_agent/`; shared developer tools and
+infrastructure tests stay in `tools/` and `tests/`. See README's layout table.
+
+`BaseAgent` now owns the common dispatch, visible lookup, Energy and readiness
+helpers. Both deck pilots inherit it. All scoring methods and 179 prior
+decisions are unchanged; both deck lists are byte-identical. The SDK loader,
+registry, report fingerprint paths, replay tool and notebook generator use
+the new locations. The archive still supplies root `main.py` and `deck.csv`.
+
+Local generated files now go to `build/notebooks/<deck-folder>/`. The old
+`ipynb/work/` tree was moved intact to `build/legacy-notebook-work-20261020/`.
+The two notebooks have moved into the deck folders, so `ipynb/` is gone.
+Existing `/build/` ignore rules cover the new workspaces and preserved files.
+
+Validation: 38 tests pass with `python -X utf8 -m unittest discover -v`.
+All four code cells in both notebooks ran locally from their deck folders;
+four games per notebook completed without errors, deleted `sdk.py` was restored,
+and both archives passed member/source/Linux-library checks. Each embeds 15
+project files. This layout has not been rerun in Kaggle. The earlier live run
+below tested the previous layout and does not certify this package revision.
+Evidence and pre-change source/graph snapshots: `results/2026-10-20-deck-layout/`.
+
+The following consolidation account describes the earlier checkpoint; its
+old filenames are historical. Current locations are given in the file table.
 
 ## What was consolidated
 
@@ -47,19 +111,17 @@ These files are ignored and are not part of a fresh clone.
 
 ## What is already built
 
-| File | Purpose |
+| File or folder | Purpose |
 |---|---|
-| `main.py`, `deck.csv` | Abomasnow/Kyogre competition entry and 60-card deck |
-| `main_alakazam.py`, `decks/alakazam.csv` | Alakazam/Dudunsparce entry and 60-card deck |
-| `pokemon_agent/policy.py` | Abomasnow decisions, legal-choice handling and shared helpers |
-| `pokemon_agent/alakazam.py` | Alakazam hand growth, damage-counter attack and resource priorities |
-| `pokemon_agent/agents.py` | Select a named pilot and its corresponding deck |
-| `pokemon_agent/sdk.py` | Find the supplied simulator SDK, read decks and validate choices |
-| `pokemon_agent/runner.py` | Run balanced local games and save results, errors and timings |
-| `tools/analyze_replays.py` | Analyze full Kaggle gameplay replays; reject timing-only logs |
-| `tools/build_notebook.py` | Generate either Kaggle notebook from the Python sources |
-| `tests/` | Policy, replay, native runner and notebook recovery checks |
-| `tools/graph_memory.py` | Query and update private local Graphify memory |
+| `decks/abomasnow_kyogre/` | Abomasnow entry, strategy, card list, notebook and strategy tests |
+| `decks/alakazam_dudunsparce/` | Alakazam/Dudunsparce entry, strategy, list, notebook and strategy tests |
+| `pokemon_agent/base.py` | Shared legal-choice dispatch and visible-state/attack helpers |
+| `pokemon_agent/random_agent.py` | Shared random baseline |
+| `pokemon_agent/agents.py` | Shared pilot/deck registry |
+| `pokemon_agent/sdk.py` | SDK loading, metadata, deck reading and validation |
+| `pokemon_agent/runner.py` | Match isolation, timing, failures and reports |
+| `tools/` | Notebook generator, replay analyzer and private graph-memory adapter |
+| `tests/` | Shared runtime, notebook and replay infrastructure checks |
 
 Earlier replay improvements avoid exposing an idle benched Mega for an easy
 Prize finish, prepare a backup Kyogre against visible counter threats, and
@@ -111,14 +173,14 @@ Run commands from the repository root with the downloaded official competition
 folder available for the native SDK:
 
 ```powershell
-python -X utf8 -m unittest discover -s tests -v
+python -X utf8 -m unittest discover -v
 python -X utf8 -m pokemon_agent.runner --agent alakazam --opponent abomasnow --games 100
 python -X utf8 -m pokemon_agent.runner --agent alakazam --opponent random --games 40
 python -X utf8 tools/build_notebook.py --agent alakazam
 python -X utf8 tools/build_notebook.py --agent abomasnow
 ```
 
-In Kaggle, import the desired notebook from `ipynb/`, attach
+In Kaggle, import the desired notebook from the appropriate `decks/<deck>/` folder, attach
 **The Pokémon Company - PTCG AI Battle Challenge Playground** using
 **Add Input > Competition Datasets**, wait until it is ready, then **Run All**.
 If explicitly setting `SDK_ROOT`, use the directory that contains `cg/api.py`.
@@ -126,10 +188,10 @@ A path setting cannot replace missing competition files.
 
 | Notebook | Generated Kaggle submission archive |
 |---|---|
-| `ipynb/alakazam.ipynb` | `/kaggle/working/alakazam/submission.tar.gz` |
-| `ipynb/abomasnow_kyogre.ipynb` | `/kaggle/working/abomasnow-kyogre/submission.tar.gz` |
+| `decks/alakazam_dudunsparce/alakazam_dudunsparce.ipynb` | `/kaggle/working/alakazam/submission.tar.gz` |
+| `decks/abomasnow_kyogre/abomasnow_kyogre.ipynb` | `/kaggle/working/abomasnow-kyogre/submission.tar.gz` |
 
-Local generation uses `ipynb/work/`. Creating an archive does not submit it.
+Local generation uses `build/notebooks/<deck-folder>/`. Creating an archive does not submit it.
 Local source changes do not automatically update an existing Kaggle notebook.
 
 ## Continue from here

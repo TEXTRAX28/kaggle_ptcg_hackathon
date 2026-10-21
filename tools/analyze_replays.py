@@ -9,7 +9,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from pokemon_agent.policy import AbomasnowAgent
+from pokemon_agent.agents import create_agent
 from pokemon_agent.sdk import load_sdk, validate_selection
 
 
@@ -47,7 +47,7 @@ def analyze(path, player, agent=None):
     seat = names.index(player)
     if data["statuses"] != ["DONE", "DONE"]:
         raise ValueError(f"{path.name}: incomplete/error replay; do not treat it as a completed game")
-    agent = agent or AbomasnowAgent()
+    agent = agent or create_agent("abomasnow")
     api, _ = load_sdk()
     rounds, contexts, changes, main_decisions = {}, Counter(), [], []
     calls = list(decisions(data, seat))
@@ -124,7 +124,6 @@ def analyze(path, player, agent=None):
 
 
 def main():
-    from pokemon_agent.agents import create_agent
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("files", nargs="+", type=Path)
     parser.add_argument("--player", required=True)

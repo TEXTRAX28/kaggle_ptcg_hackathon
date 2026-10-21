@@ -1,6 +1,6 @@
-"""Alternative entry point; the Alakazam notebook packages this as main.py."""
+"""Alakazam/Dudunsparce entry point, packaged as root main.py for Kaggle."""
 from functools import lru_cache
-from pokemon_agent.alakazam import AlakazamAgent
+from decks.alakazam_dudunsparce.policy import AlakazamAgent
 
 
 @lru_cache(maxsize=1)

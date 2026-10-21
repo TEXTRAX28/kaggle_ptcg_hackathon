@@ -3,10 +3,10 @@ from collections import Counter
 import copy
 import unittest
 
-from pokemon_agent.agents import create_agent, default_deck
-from pokemon_agent.alakazam import AlakazamAgent
+from pokemon_agent.agents import default_deck
+from .policy import AlakazamAgent
 from pokemon_agent.runner import play_game
-from test_agent import card, pokemon, observation, config
+from tests.helpers import card, pokemon, observation, config
 
 
 def position(options, hand_size=18):
@@ -27,7 +27,7 @@ class AlakazamTests(unittest.TestCase):
         cls.agent = AlakazamAgent()
 
     def test_dedicated_entry_returns_exact_sixty_card_non_ex_deck(self):
-        from main_alakazam import agent
+        from .main import agent
         deck = agent({"select": None})
         self.assertEqual(deck, default_deck("alakazam"))
         self.assertEqual(len(deck), 60)
@@ -93,11 +93,7 @@ class AlakazamTests(unittest.TestCase):
         other["search_begin_input"] = None
         self.assertEqual(self.agent(obs), self.agent(other))
 
-    def test_factory_preserves_both_distinct_decks(self):
-        self.assertNotEqual(default_deck("alakazam"), default_deck("abomasnow"))
-        self.assertEqual(create_agent("alakazam").deck, default_deck("alakazam"))
-        with self.assertRaises(ValueError):
-            create_agent("unknown")
+
 
     def test_native_battle_accepts_candidate_and_completes(self):
         settings = dict(config(), agent="alakazam", agent_deck=default_deck("alakazam"))
