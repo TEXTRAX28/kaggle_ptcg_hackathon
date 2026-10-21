@@ -24,6 +24,8 @@ decks/
     deck.csv
     alakazam_dudunsparce.ipynb
     test_policy.py
+    replay_positions.json      # Visible positions from episode 125168227
+    REPLAY_ANALYSIS.md          # Both rounds and all 299 replay steps
 pokemon_agent/                 # Shared runtime and evaluation code
 tools/                         # Shared development utilities
 tests/                         # Shared infrastructure tests and fixtures
@@ -71,6 +73,7 @@ Evidence: `results/2026-10-20-deck-layout/verification.json`.
 | Branch | Purpose |
 |---|---|
 | `main` | Combined working branch: replay improvements, both pilots/decks, both notebooks and SDK setup fixes |
+| `improvement-2-alakazam-replay` | Preserved folder-layout checkpoint `0549661`, then Alakazam fixes from the complete 299-step audit |
 | `improvement-1` at `e226a03` | Retained checkpoint for the replay-based Abomasnow policy fixes |
 | `deck-experiment-1` at `f5ac167` | Retained checkpoint for Alakazam and the notebook module recovery fix |
 
@@ -78,11 +81,37 @@ On 2026-10-20, `git merge --no-edit improvement-1 deck-experiment-1` on `main`
 reported **Already up to date**: both branch histories were already included,
 with no conflicts. The original Abomasnow baseline remains at commit `842c9bb`.
 The two pilots now live in their own deck folders. Shared mechanics have been
-separated without changing either pilot's strategy. Continue shared work on
-`main`; the historical branch refs are retained for recovery.
+separated without changing either pilot's strategy. The current Alakazam changes
+are isolated on `improvement-2-alakazam-replay`; `main` remains at `bfe80f7`.
+The historical branch refs are retained for recovery.
 
 See [HANDOFF.md](HANDOFF.md) for the consolidation, verified results, commands
 and remaining work.
+
+## Alakazam replay improvements: 2026-10-22
+
+[Read the full analysis and all 299 steps](decks/alakazam_dudunsparce/REPLAY_ANALYSIS.md).
+Episode `125168227` was a 0–2 loss against Alakazam with Toucannon/Togekiss,
+without execution errors or deck-out. The audit found premature attacks that
+skipped safe backup preparation, searches for unusable evolutions, weak Basic
+recovery, and hand disruption exposing those weaknesses. Togekiss supplied
+three extra Prizes across the match; Battle Cage cannot stop that Ability.
+
+The deck list is unchanged. `policy.py` now prepares before an ordinary
+Powerful Hand knockout when its hand cost preserves that knockout, prioritizes
+usable evolution routes and missing Basics, balances Poffin's attack/draw lines,
+and distinguishes equal-Prize gust targets. Attacks that already win take
+priority. Twelve sanitized replay positions and eleven new tests cover these
+behaviors, including hand-cost boundaries and hidden-payload invariance.
+
+All **49 tests pass**. Final balanced native single-game benchmarks: **161/200**
+against the frozen same-deck policy, **93/100** against our Abomasnow, **39/40**
+against random; zero errors. These unpaired, unseeded deals are local evidence
+against those pilots, not a BO3 or Kaggle rating estimate. Both regenerated
+notebooks ran four games locally and produced source-checked archives. See the
+analysis for confidence intervals, remaining limitations and the BF16/training
+proposal. Keep Python files as the source of truth and regenerate the notebook
+for Kaggle; manually maintaining duplicate cloud code risks version drift.
 
 ## Deck experiment 1: Alakazam / Dudunsparce
 

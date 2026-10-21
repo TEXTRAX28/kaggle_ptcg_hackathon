@@ -1,43 +1,65 @@
 # Pokémon TCG project handoff
 
 Updated: 2026-10-22. This repository contains two Python heuristic pilots:
-Mega Abomasnow ex/Kyogre and Alakazam/Dudunsparce. The combined working branch
-is `main`. There is no neural network, BF16 implementation or training pipeline.
+Mega Abomasnow ex/Kyogre and Alakazam/Dudunsparce. The current branch is
+`improvement-2-alakazam-replay`; `main` remains at `bfe80f7`. There is no neural
+network, BF16 implementation or training pipeline.
 
-## Active replay audit and next implementation
+## Completed replay audit and current improvements
 
-The current request is to audit every one of the 299 steps in episode
-`125168227`, explain the loss, and implement evidence-backed improvements on a
-new branch. The repeated request after context compaction is the same task;
-record it once in project memory. Update this existing handoff as work advances.
+The 299-step audit of episode `125168227` and focused fixes are complete on
+`improvement-2-alakazam-replay`. Its first commit, `0549661`, preserves the tested
+deck-folder layout before changing strategy. The repeated request after context
+compaction is one task. This existing handoff was updated before work began.
 
 The full replay is already downloaded at `match-data/125168227.json` (ignored):
 8,225,947 bytes; SHA256
 `a114769705d8f1b628d2c6dcc5e8d1fc2efa63adb1e4bbec57f96d394c51c12f`.
 Our player is `Natanael Rehuel S`, seat 1, against `masterlincs`; final rewards
 are `[1, -1]`, both statuses DONE. Access verification is saved in
-`results/2026-10-21-episode-125168227-access.json`. Strategic causes and round
-scores still need auditing. Actions at step t answer the ACTIVE observation at
+`results/2026-10-21-episode-125168227-access.json`. We lost 0–2.
+Actions at step t answer the ACTIVE observation at
 step t-1. Spectator-only hidden information must never enter policy decisions.
 
-Before implementation, preserve the pending deck-folder reorganization and
-create a separate improvement branch. At this handoff update, HEAD is
-`main` / `bfe80f7`; the layout revision below remains uncommitted, including
-new untracked deck folders and shared helpers. Do not discard these files.
-The next work is a complete step ledger, causal analysis, targeted policy
-regressions, native-game checks, notebook regeneration and incremental Graphify
-refresh. Current Graphify has 301 source nodes, 455 edges and 32 indexed sources;
-all source hashes matched at the start of this task.
+The tracked report `decks/alakazam_dudunsparce/REPLAY_ANALYSIS.md` explains both
+rounds and contains all 299 contiguous raw-step rows (0–298). Detailed options,
+independent audit evidence and benchmark reports are ignored under
+`results/2026-10-22-replay-audit/`. All 297 non-deck actions were legal, and all
+130 of our recorded choices matched the frozen old policy. There were no agent
+errors or deck-outs. Premature KOs skipped safe preparation; searches/recovery
+missed usable evolution routes and Basics; Special Red Card collapsed our hands;
+opposing Togekiss supplied three extra Prizes. Battle Cage cannot prevent this.
+
+Alakazam now develops before an ordinary Powerful Hand KO when its hand cost
+preserves the same KO, immediately takes game-winning attacks, searches useful
+evolution routes, rebuilds missing Basics, balances Poffin attack/draw lines,
+and distinguishes equal-Prize gust threats. The 60-card deck is unchanged.
+Twelve sanitized positions and eleven new tests cover these decisions. Draw
+Supporter sequencing and deeper planning remain limitations, not claimed fixes.
+
+Verification: all 49 tests pass. Final balanced native single-game results:
+161/200 vs frozen `0549661` (95% Wilson 74.5–85.4%), 93/100 vs our Abomasnow,
+39/40 vs random; all 340 completed without errors. The unchanged frozen pilot
+scored 88/100 vs Abomasnow in a separate batch. Native deals/coins were unseeded,
+unpaired; these do not prove BO3 or ladder gains. Both regenerated notebooks
+ran all four code cells locally, four games each, with archives matching 15
+project sources and containing `cg/libcg.so`. Saved outputs are empty.
+Incremental Graphify refreshed only policy.py/test_policy.py: 320 source nodes,
+501 edges, 24 communities, all 32 source hashes current; legacy IDs preserved.
 
 The user permits accessing/editing their Kaggle notebook where possible:
 `https://www.kaggle.com/code/natanaelrehuels/ptcg-alakazam/edit/run/360438660`.
-Preserve any cloud draft before replacing it; validate local sources first.
-No competition submission is requested. Local files plus a regenerated notebook
-are the fallback. Assess BF16 separately from opponent/self-play training:
-the current pilot has no neural workload, and lower precision alone is not a
-playing strategy. No training changes have yet been made.
+The old draft was downloaded and preserved at
+`results/2026-10-22-replay-audit/kaggle-draft-before.ipynb`. Subsequent editing
+was blocked: a fresh editor stayed Loading and displayed a reCAPTCHA service
+connection error, with Import disabled. No cloud code was changed or submitted;
+this revision has not run on Kaggle. Import the generated
+`decks/alakazam_dudunsparce/alakazam_dudunsparce.ipynb`, attach competition data,
+then Run All. Keep local Python as the source of truth. BF16 is only a future
+neural throughput/precision choice. Diverse-opponent training with frozen
+held-out evaluation is a proposed next phase; no learner was implemented.
 
-## Current deck layout revision
+## Preserved deck layout revision (before policy fixes)
 
 After consolidation, the user requested grouping all deck-specific files.
 Each folder under `decks/abomasnow_kyogre/` and `decks/alakazam_dudunsparce/`
@@ -200,9 +222,9 @@ Local source changes do not automatically update an existing Kaggle notebook.
    `notes/CONTEXT.md`, query the graph and consult its report before inspecting
    only the necessary source passages. Do not assume ignored memory exists
    in a fresh clone.
-2. Use `main` as the combined working branch. Keep both pilots available so
-   changes can be measured against a fixed baseline.
-3. Obtain full BO3 gameplay replays and test against competent, varied
+2. Continue current fixes on `improvement-2-alakazam-replay`; keep `main`
+   unchanged until a merge is requested. Frozen Alakazam baseline is `0549661`.
+3. Collect additional full BO3 replays and test against competent, varied
    opponents, especially hand disruption and bench pressure. Timing-only
    stdout/stderr downloads are insufficient for gameplay analysis.
 4. Improve the decisions revealed by those games and compare balanced results.

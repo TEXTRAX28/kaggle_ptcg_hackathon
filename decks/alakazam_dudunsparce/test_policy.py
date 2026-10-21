@@ -1,11 +1,14 @@
 """Alakazam-specific strategy, deployment and native legality regressions."""
 from collections import Counter
 import copy
+import json
+from pathlib import Path
 import unittest
 
 from pokemon_agent.agents import default_deck
 from .policy import AlakazamAgent
 from pokemon_agent.runner import play_game
+from pokemon_agent.sdk import validate_selection
 from tests.helpers import card, pokemon, observation, config
 
 
@@ -100,6 +103,98 @@ class AlakazamTests(unittest.TestCase):
         result = play_game(settings)
         self.assertEqual(result["status"], "completed", result.get("error"))
         self.assertNotIn("error", result)
+
+
+class ReplayRegressionTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.agent = AlakazamAgent()
+        cls.positions = json.loads(Path(__file__).with_name("replay_positions.json").read_text(encoding="utf-8"))
+
+    def obs(self, name):
+        return copy.deepcopy(self.positions[name]["observation"])
+
+    def chosen(self, obs):
+        return [obs["select"]["option"][i] for i in self.agent(obs)]
+
+    def test_search_completes_missing_stage_one_before_duplicate_stage_two(self):
+        for name in ("pad_first_stage1", "hilda_reachable_evolution", "pad_second_stage1"):
+            with self.subTest(name=name):
+                obs = self.obs(name)
+                self.assertEqual(self.agent.resolve(obs, self.chosen(obs)[0])["id"], 742)
+
+    def test_search_prioritizes_immediately_usable_alakazam(self):
+        obs = self.obs("pad_first_stage1")
+        me, _ = self.agent.players(obs)
+        me["active"][0]["id"] = 742
+        me["hand"] = [c for c in me["hand"] if c["id"] != 743]
+        self.assertEqual(self.agent.resolve(obs, self.chosen(obs)[0])["id"], 743)
+
+    def test_safe_backup_attachment_before_ordinary_knockout(self):
+        obs = self.obs("prepare_backup_energy")
+        option = self.chosen(obs)[0]
+        self.assertEqual(option["type"], self.agent.O.ATTACH)
+        self.assertEqual(self.agent.target(obs, option)["serial"], 73)
+        me, enemy = self.agent.players(obs)
+        self.assertGreaterEqual(20*(len(me["hand"])-1), enemy["active"][0]["hp"])
+
+    def test_safe_preparation_does_not_spend_the_knockout(self):
+        obs = self.obs("prepare_backup_energy")
+        options = obs["select"]["option"]
+        obs["select"]["option"] = [options[4], options[22], options[24]]
+        me, enemy = self.agent.players(obs)
+        me["hand"] = me["hand"][:6]  # 120 is exactly the remaining HP.
+        self.assertEqual(self.chosen(obs)[0]["type"], self.agent.O.ATTACK)
+        me["prize"] = [None]
+        me["hand"] += [card(5, 300+i) for i in range(10)]
+        self.assertEqual(self.chosen(obs)[0]["type"], self.agent.O.ATTACK)
+
+    def test_red_card_before_ko_when_it_preserves_damage(self):
+        obs = self.obs("disrupt_large_hand_before_ko")
+        options = obs["select"]["option"]
+        obs["select"]["option"] = [options[6], options[12], options[13]]
+        self.assertEqual(self.agent.resolve(obs, self.chosen(obs)[0])["id"], 1413)
+
+    def test_recovery_rebuilds_basic_instead_of_unusable_energy(self):
+        obs = self.obs("recover_missing_basic")
+        self.assertEqual(self.agent.resolve(obs, self.chosen(obs)[0])["id"], 741)
+
+    def test_search_avoids_stage_two_without_an_evolution_route(self):
+        obs = self.obs("search_supported_evolution")
+        self.assertEqual(self.agent.resolve(obs, self.chosen(obs)[0])["id"], 65)
+
+    def test_poffin_restores_both_attack_and_draw_lines(self):
+        obs = self.obs("balance_poffin_targets")
+        self.assertCountEqual([self.agent.resolve(obs, o)["id"] for o in self.chosen(obs)], [741, 65])
+
+    def test_gust_breaks_equal_prize_tie_for_toucannon(self):
+        obs = self.obs("gust_toucannon_threat")
+        self.assertEqual(self.agent.resolve(obs, self.chosen(obs)[0])["id"], 1182)
+        _, enemy = self.agent.players(obs)
+        targets = [self.agent.knockout_target_score(obs, p, len(self.agent.players(obs)[0]["hand"])-1)
+                   for p in enemy["bench"]]
+        self.assertEqual(enemy["bench"][targets.index(max(targets))]["id"], 1409)
+        # A visible Togekiss is a higher-value equal-Prize target. This is a
+        # synthetic extension: no Boss-vs-visible-Togekiss miss is claimed.
+        target = copy.deepcopy(enemy["bench"][0])
+        target.update(id=214, hp=140, energies=[])
+        self.assertGreater(self.agent.knockout_target_score(obs, target), max(targets))
+
+    def test_winning_attack_precedes_optional_gust(self):
+        obs = self.obs("gust_toucannon_threat")
+        me, _ = self.agent.players(obs)
+        me["prize"] = [None]
+        self.assertEqual(self.chosen(obs)[0]["type"], self.agent.O.ATTACK)
+
+    def test_recorded_positions_are_legal_and_hidden_payload_invariant(self):
+        for name, row in self.positions.items():
+            with self.subTest(name=name):
+                obs = copy.deepcopy(row["observation"])
+                action = self.agent(obs)
+                validate_selection(obs, action)
+                self.assertIsNone(self.agent.players(obs)[1]["hand"])
+                obs["search_begin_input"] = "unavailable spectator payload"
+                self.assertEqual(self.agent(obs), action)
 
 
 if __name__ == "__main__":

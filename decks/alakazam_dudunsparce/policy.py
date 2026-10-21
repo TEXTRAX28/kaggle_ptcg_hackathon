@@ -13,6 +13,7 @@ PSYCHIC, TELEPATH = 5, 19
 POFFIN, CANDY, PAD, DAWN, HILDA = 1086, 1079, 1152, 1231, 1225
 LILLIE, BOSS, LANA, STRETCHER, CAGE, RED_CARD = 1227, 1182, 1184, 1097, 1264, 1413
 DECK_PATH = ROOT / "decks/alakazam_dudunsparce/deck.csv"
+TOGEKISS, TOUCANNON = 214, 1409
 
 
 class AlakazamAgent(BaseAgent):
@@ -57,6 +58,21 @@ class AlakazamAgent(BaseAgent):
         active = bool(me["active"] and pokemon["serial"] == me["active"][0]["serial"])
         return {ALAKAZAM: 140, KADABRA: 100, ABRA: 90}.get(pokemon["id"], -10) + (20 if active else 0)
 
+    def knockout_target_score(self, obs, defender, hand_count=None):
+        """Break equal-Prize KO ties using threats visible on the board."""
+        score = self.attack_score(obs, 1072, defender=defender, hand_count=hand_count)
+        if score < 1800:
+            return score
+        # A Prize multiplier matters even while unpowered. These bonuses stay
+        # below the value of an additional Prize and never override a win.
+        if defender["id"] == TOGEKISS:
+            score += 350
+        elif defender["id"] == ALAKAZAM and self.can_pay(defender, 1072):
+            score += 180
+        elif defender["id"] == TOUCANNON:
+            score += 220
+        return score
+
     def card_value(self, obs, card, chosen):
         if card is None:
             return 1
@@ -66,12 +82,19 @@ class AlakazamAgent(BaseAgent):
         field = Counter(p["id"] for p in self.field(me))
         basics, draws = self.lines(me)
         if cid == ALAKAZAM:
-            return 110 if hand[cid] + chosen[cid] < max(1, field[KADABRA] + field[ABRA]) else 15
+            routes = field[KADABRA] + min(field[ABRA], hand[KADABRA] + hand[CANDY])
+            if field[KADABRA] and hand[cid] + chosen[cid] == 0:
+                return 155
+            return 110 if routes and hand[cid] + chosen[cid] < routes else 15
         if cid == KADABRA:
-            return 100 if hand[cid] + chosen[cid] < max(1, field[ABRA]) else 15
+            return 130 if hand[cid] + chosen[cid] < field[ABRA] else 15
         if cid == ABRA:
+            if basics + hand[cid] + chosen[cid] == 0:
+                return 180  # Rebuild the attack line before stockpiling Energy.
             return 95 if basics + hand[cid] + chosen[cid] < 3 else 15
         if cid == DUNSPARCE:
+            if len(self.field(me)) == 1 and not hand[cid] + chosen[cid]:
+                return 140
             return 85 if draws + hand[cid] + chosen[cid] < 2 else 15
         if cid == DUDUNSPARCE:
             return 90 if hand[cid] + chosen[cid] < max(1, field[DUNSPARCE]) else 15
@@ -83,6 +106,36 @@ class AlakazamAgent(BaseAgent):
                 LILLIE: 50 if len(me["hand"]) < 6 else 5}.get(cid, 20)
 
     def main_score(self, obs, option):
+        score = self.development_score(obs, option)
+        if score <= 0 or option["type"] in (self.O.ATTACK, self.O.RETREAT, self.O.END):
+            return score
+        me, opponent = self.players(obs)
+        # End the game immediately when possible. For an ordinary Powerful
+        # Hand KO, develop first only while the SAME KO survives the hand cost.
+        attacks = [o for o in obs["select"]["option"] if o["type"] == self.O.ATTACK]
+        if not any(o["attackId"] == 1072 for o in attacks):
+            return score
+        attack = self.attack_score(obs, 1072)
+        if attack >= 7800:
+            return min(score, attack - 1)
+        if attack < 1800:
+            return score
+        card = self.resolve(obs, option)
+        if not card or option["type"] not in (self.O.PLAY, self.O.ATTACH, self.O.EVOLVE, self.O.ABILITY):
+            return score
+        if card["id"] in (BOSS, LILLIE):
+            return score  # Gust changes the target; refresh has an unknown hand.
+        if option["type"] == self.O.ABILITY:
+            if option.get("area") == self.A.ACTIVE:
+                return score  # Do not shuffle away the attacker.
+            cost = 0
+        else:
+            cost = 2 if card["id"] == CANDY else 1
+        if 20 * (len(me["hand"]) - cost) < opponent["active"][0]["hp"]:
+            return score
+        return max(score, attack + 5 + score / 10000)
+
+    def development_score(self, obs, option):
         me, opponent = self.players(obs)
         kind = option["type"]
         hand = Counter(c["id"] for c in me["hand"])
@@ -146,8 +199,8 @@ class AlakazamAgent(BaseAgent):
         if cid == BOSS:
             if not me["active"] or me["active"][0]["id"] != ALAKAZAM or not self.can_pay(me["active"][0], 1072):
                 return -10
-            current = self.attack_score(obs, 1072)
-            best = max((self.attack_score(obs, 1072, defender=p, hand_count=len(me["hand"])-1)
+            current = self.knockout_target_score(obs, opponent["active"][0])
+            best = max((self.knockout_target_score(obs, p, hand_count=len(me["hand"])-1)
                         for p in opponent["bench"]), default=-10)
             return best + 20 if best >= 1800 and best > current else -10
         return -10
@@ -182,16 +235,18 @@ class AlakazamAgent(BaseAgent):
                 return 100 if card and card["id"] == DUNSPARCE else 80
             if context in (self.C.SWITCH, self.C.TO_ACTIVE) and card and "energies" in card:
                 if option.get("playerIndex", obs["current"]["yourIndex"]) != obs["current"]["yourIndex"]:
-                    return self.attack_score(obs, 1072, defender=card)
+                    return self.knockout_target_score(obs, card)
                 return self.ready_score(obs, card) + (40 if card["id"] == DUNSPARCE else 0)
             if context == self.C.ATTACH_FROM and card and "energies" in card:
                 return self.energy_priority(obs, card)
             if context in (self.C.SETUP_BENCH_POKEMON, self.C.TO_BENCH, self.C.TO_FIELD) and card:
                 basics, draws = self.lines(me)
                 if card["id"] == ABRA:
-                    return 100 if basics + chosen[ABRA] < 3 else -10
+                    count = basics + chosen[ABRA]
+                    return 150 if count == 0 else 100 if count < 3 else -10
                 if card["id"] == DUNSPARCE:
-                    return 90 if draws + chosen[DUNSPARCE] < 2 else -10
+                    count = draws + chosen[DUNSPARCE]
+                    return 130 if count == 0 else 90 if count < 2 else -10
             value = self.card_value(obs, card, chosen)
             return -value if discard else value
 
