@@ -186,6 +186,103 @@ class ReplayRegressionTests(unittest.TestCase):
         me["prize"] = [None]
         self.assertEqual(self.chosen(obs)[0]["type"], self.agent.O.ATTACK)
 
+    def test_mist_energy_is_not_a_false_game_winning_counter_knockout(self):
+        obs = self.obs("history_mist_false_win")
+        self.assertLess(self.agent.attack_score(obs, 1072), 0)
+        self.assertNotEqual(self.chosen(obs)[0]["type"], self.agent.O.ATTACK)
+        # Mist stops effects; it does not stop Kadabra's ordinary damage.
+        attack = self.agent.cards[742].attacks[0]
+        self.assertGreater(self.agent.attack_score(obs, attack), 0)
+
+    def test_rock_fighting_only_protects_fighting_pokemon(self):
+        obs = self.obs("history_mist_false_win")
+        _, enemy = self.agent.players(obs)
+        target = enemy["active"][0]
+        target["energyCards"][0]["id"] = 20
+        self.assertGreater(self.agent.attack_score(obs, 1072), 0)  # Grass Crustle.
+        target["id"] = 117  # Fighting Cornerstone Mask Ogerpon ex.
+        self.assertLess(self.agent.attack_score(obs, 1072), 0)
+        target["energyCards"] = []
+        self.assertGreater(self.agent.attack_score(obs, 1072), 0)  # Its Ability stops damage only.
+
+    def test_gust_takes_an_unprotected_knockout_instead_of_attacking_mist(self):
+        obs = self.obs("history_mist_gust_escape")
+        self.assertEqual(self.agent.resolve(obs, self.chosen(obs)[0])["id"], 1182)
+
+    def test_ability_protection_stops_counters_but_bench_only_protection_does_not(self):
+        obs = self.obs("history_ability_immunity")
+        _, enemy = self.agent.players(obs)
+        target = enemy["active"][0]
+        for cid in (203, 835, 1348, 1349, 1374, 1375):
+            with self.subTest(card=cid):
+                target["id"] = cid
+                self.assertLess(self.agent.attack_score(obs, 1072), 0)
+        target["id"] = 28  # This other Poltchageist is protected only on the Bench.
+        self.assertGreater(self.agent.attack_score(obs, 1072), 0)
+
+    def test_rocket_articuno_protection_applies_only_to_basic_rocket_pokemon(self):
+        obs = self.obs("history_ability_immunity")
+        _, enemy = self.agent.players(obs)
+        enemy["active"][0]["id"] = 463  # Team Rocket's Murkrow.
+        enemy["bench"] = [pokemon(414, 800, 120, owner=enemy["active"][0]["playerIndex"])]
+        self.assertLess(self.agent.attack_score(obs, 1072), 0)
+        enemy["active"][0]["id"] = 741  # Abra is outside Repelling Veil's scope.
+        self.assertGreater(self.agent.attack_score(obs, 1072), 0)
+
+    def test_confused_attacker_retreats_to_a_ready_replacement_for_the_same_knockout(self):
+        obs = self.obs("history_confusion_pivot")
+        self.assertEqual(self.chosen(obs)[0]["type"], self.agent.O.RETREAT)
+        me, _ = self.agent.players(obs)
+        me["prize"] = [None]
+        self.assertEqual(self.chosen(obs)[0]["type"], self.agent.O.RETREAT)
+        me["confused"] = False
+        self.assertEqual(self.chosen(obs)[0]["type"], self.agent.O.ATTACK)
+
+    def test_hilda_finds_missing_attack_energy_before_a_random_refresh(self):
+        obs = self.obs("history_energy_supporter")
+        self.assertEqual(self.agent.resolve(obs, self.chosen(obs)[0])["id"], 1225)
+        me, _ = self.agent.players(obs)
+        me["discard"] += [card(19, 500+i) for i in range(4)]
+        self.assertEqual(self.agent.resolve(obs, self.chosen(obs)[0])["id"], 1227)
+
+    def test_search_remains_available_with_four_cards_and_reserves_a_draw(self):
+        obs = self.obs("history_low_deck_search")
+        self.assertEqual(self.agent.resolve(obs, self.chosen(obs)[0])["id"], 1225)
+        me, _ = self.agent.players(obs)
+        me["deckCount"] = 2
+        self.assertEqual(self.chosen(obs)[0]["type"], self.agent.O.END)
+
+    def test_gust_denies_an_unpowered_alakazam_in_the_mirror(self):
+        obs = self.obs("history_mirror_unpowered_threat")
+        self.assertEqual(self.agent.resolve(obs, self.chosen(obs)[0])["id"], 1182)
+
+    def test_refresh_precedes_spending_the_draw_engine(self):
+        obs = self.obs("history_refresh_before_draw")
+        self.assertEqual(self.agent.resolve(obs, self.chosen(obs)[0])["id"], 1227)
+
+    def test_cage_is_played_before_the_opposing_counter_line_evolves(self):
+        obs = self.obs("history_preemptive_cage")
+        self.assertEqual(self.agent.resolve(obs, self.chosen(obs)[0])["id"], 1264)
+
+    def test_hammer_removes_mist_before_claiming_a_knockout(self):
+        obs = self.obs("history_mist_false_win")
+        me, _ = self.agent.players(obs)
+        me["hand"].append(card(1081, 900))
+        obs["select"]["option"].append({"type": 7, "index": len(me["hand"])-1})
+        self.assertEqual(self.agent.resolve(obs, self.chosen(obs)[0])["id"], 1081)
+
+    def test_hammer_discards_protection_instead_of_other_special_energy(self):
+        obs = self.obs("history_mist_false_win")
+        _, enemy = self.agent.players(obs)
+        target = enemy["active"][0]
+        target["energyCards"].append(card(19, 901, owner=target["playerIndex"]))
+        obs["select"].update(context=int(self.agent.C.DISCARD_ENERGY),
+                             effect=card(1081, 900), minCount=1, maxCount=1,
+                             option=[{"type": int(self.agent.O.ENERGY), "playerIndex": target["playerIndex"],
+                                      "area": int(self.agent.A.ACTIVE), "index": 0, "energyIndex": i, "count": 1}
+                                     for i in (1, 0)])
+        self.assertEqual(self.agent(obs), [1])
+
     def test_recorded_positions_are_legal_and_hidden_payload_invariant(self):
         for name, row in self.positions.items():
             with self.subTest(name=name):

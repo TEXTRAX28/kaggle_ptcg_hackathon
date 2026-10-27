@@ -10,6 +10,7 @@ from pokemon_agent.sdk import ROOT, read_deck
 
 ABRA, KADABRA, ALAKAZAM, DUNSPARCE, DUDUNSPARCE = 741, 742, 743, 65, 66
 PSYCHIC, TELEPATH = 5, 19
+MIST, ROCK_FIGHTING, HAMMER = 11, 20, 1081
 POFFIN, CANDY, PAD, DAWN, HILDA = 1086, 1079, 1152, 1231, 1225
 LILLIE, BOSS, LANA, STRETCHER, CAGE, RED_CARD = 1227, 1182, 1184, 1097, 1264, 1413
 DECK_PATH = ROOT / "decks/alakazam_dudunsparce/deck.csv"
@@ -28,6 +29,25 @@ class AlakazamAgent(BaseAgent):
         counts = Counter(p["id"] for p in self.field(player))
         return counts[ABRA] + counts[KADABRA] + counts[ALAKAZAM], counts[DUNSPARCE] + counts[DUDUNSPARCE]
 
+    def counter_protection(self, pokemon):
+        """Visible Energy that prevents Powerful Hand's attack effects."""
+        fighting = self.cards[pokemon["id"]].energyType == 6
+        return [c for c in pokemon.get("energyCards", [])
+                if c["id"] == MIST or (c["id"] == ROCK_FIGHTING and fighting)]
+
+    def counter_ability_protection(self, obs, pokemon, attacker):
+        """Protection on the prospective Active target, including after gust."""
+        target = self.cards[pokemon["id"]]
+        if pokemon["id"] in (203, 835, 1348, 1349, 1374, 1375):
+            return True
+        if pokemon["id"] == 504:
+            return any(self.cards[c["id"]].cardType == 6 for c in attacker.get("energyCards", []))
+        if pokemon["id"] == 207 and self.cards[attacker["id"]].tera:
+            return True
+        _, opponent = self.players(obs)
+        return target.basic and target.name.startswith("Team Rocket's") and any(
+            p["id"] == 414 for p in self.field(opponent))
+
     def attack_score(self, obs, attack_id, attacker=None, defender=None, hand_count=None):
         me, opponent = self.players(obs)
         attacker = attacker or next(iter(me["active"]), None)
@@ -36,6 +56,8 @@ class AlakazamAgent(BaseAgent):
             return -10
         attack = self.attacks[attack_id]
         if attack_id == 1072:
+            if self.counter_protection(defender) or self.counter_ability_protection(obs, defender, attacker):
+                return -1  # Damage counters are an effect, not attack damage.
             damage = 20 * (len(me["hand"]) if hand_count is None else hand_count)
         else:
             damage = max(0, attack.damage)
@@ -67,8 +89,8 @@ class AlakazamAgent(BaseAgent):
         # below the value of an additional Prize and never override a win.
         if defender["id"] == TOGEKISS:
             score += 350
-        elif defender["id"] == ALAKAZAM and self.can_pay(defender, 1072):
-            score += 180
+        elif defender["id"] == ALAKAZAM:
+            score += 180 if self.can_pay(defender, 1072) else 100
         elif defender["id"] == TOUCANNON:
             score += 220
         return score
@@ -159,11 +181,20 @@ class AlakazamAgent(BaseAgent):
             active = max((self.attack_score(obs, o["attackId"]) for o in obs["select"]["option"]
                           if o["type"] == self.O.ATTACK), default=-10)
             bench = max((self.ready_score(obs, p) for p in me["bench"]), default=-10)
+            if me.get("confused") and bench >= 1800:
+                return bench + 50  # Retreat cures Confusion; the ready replacement keeps the KO.
             return 1600 if bench > active + 50 else -10
         if kind == self.O.ABILITY:
             card = self.resolve(obs, option)
             if card and card["id"] == DUDUNSPARCE:
-                return 950 if len(self.field(me)) > 1 and me["deckCount"] > 3 else -10
+                if len(self.field(me)) <= 1 or me["deckCount"] <= 3:
+                    return -10
+                count = 8 if len(me["prize"]) == 6 else 6
+                if len(me["hand"]) < count - 1 and me["deckCount"] > count:
+                    if any(o["type"] == self.O.PLAY and self.resolve(obs, o)["id"] == LILLIE
+                           for o in obs["select"]["option"]):
+                        return 870  # Refresh first, then use the draw left on the field.
+                return 950
             return -10
         if kind != self.O.PLAY:
             return -10
@@ -183,7 +214,15 @@ class AlakazamAgent(BaseAgent):
         if cid == PAD:
             return 900 if basics < 2 or draws < 1 or any(p["id"] in (ABRA, KADABRA) for p in self.field(me)) else -10
         if cid in (DAWN, HILDA):
-            return (850 if cid == DAWN else 800) if me["deckCount"] > 4 else -10
+            # Searches take at most three/two cards; reserve one natural draw.
+            if me["deckCount"] <= (3 if cid == DAWN else 2):
+                return -10
+            if cid == HILDA and not obs["current"]["energyAttached"] and not (hand[PSYCHIC] + hand[TELEPATH]):
+                known = sum(c["id"] == TELEPATH for c in me["discard"])
+                known += sum(c["id"] == TELEPATH for p in self.field(me) for c in p["energyCards"])
+                if known < self.deck.count(TELEPATH) and any(self.energy_priority(obs, p) > 0 for p in self.field(me)):
+                    return 1250  # Find attack Energy before spending the Supporter on a redraw.
+            return 850 if cid == DAWN else 800
         if cid == LILLIE:
             count = 8 if len(me["prize"]) == 6 else 6
             return 880 if len(me["hand"]) < count - 1 and me["deckCount"] > count else -10
@@ -193,7 +232,12 @@ class AlakazamAgent(BaseAgent):
         if cid == STRETCHER:
             return 880 if any(self.card_value(obs, c, Counter()) >= 85 for c in me["discard"]) else -10
         if cid == CAGE:
-            return 700 if any(p["id"] in (121, 132, 133) for p in self.field(opponent)) else -10
+            return 700 if any(p["id"] in (119, 120, 121, 131, 132, 133) for p in self.field(opponent)) else -10
+        if cid == HAMMER:
+            if any(self.counter_protection(p) for p in self.field(opponent)):
+                return 1700
+            special = any(self.cards[c["id"]].cardType == 6 for p in self.field(opponent) for c in p["energyCards"])
+            return 720 if special else -10
         if cid == RED_CARD:
             return 700 if opponent["handCount"] > 5 else -10
         if cid == BOSS:
@@ -231,6 +275,13 @@ class AlakazamAgent(BaseAgent):
                 target = self.target(obs, option)
                 return 100 + (60 if target["energies"] else 0) + (30 if option["inPlayArea"] == self.A.ACTIVE else 0)
             card = self.resolve(obs, option)
+            if discard and (select.get("effect") or {}).get("id") == HAMMER and card:
+                group = opponent["active"] if option.get("area") == self.A.ACTIVE else opponent["bench"]
+                target = group[option["index"]]
+                protection = self.counter_protection(target)
+                if any(c["serial"] == card["serial"] for c in protection):
+                    return 200 + (400 if len(protection) == 1 else 0) + (200 if option["area"] == self.A.ACTIVE else 0)
+                return 100 if option.get("area") == self.A.ACTIVE else 50
             if context == self.C.SETUP_ACTIVE_POKEMON:
                 return 100 if card and card["id"] == DUNSPARCE else 80
             if context in (self.C.SWITCH, self.C.TO_ACTIVE) and card and "energies" in card:

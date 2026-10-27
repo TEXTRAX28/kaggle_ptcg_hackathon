@@ -1,4 +1,4 @@
-"""Generate a portable Kaggle notebook from the tested Python source files.
+"""Generate a code-only Kaggle notebook from the tested Python source files.
 
 Run from the project root: python -X utf8 tools/build_notebook.py
 The notebook embeds a snapshot so importing it into Kaggle needs only the
@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-DECK_FOLDERS = ("abomasnow_kyogre", "alakazam_dudunsparce")
+DECK_FOLDERS = ("abomasnow_kyogre", "alakazam_dudunsparce", "alakazam_toucannon", "dragapult_blaziken")
 
 
 def cell(kind, source):
@@ -22,30 +22,12 @@ def cell(kind, source):
 
 
 def build(agent="abomasnow"):
-    if agent not in ("abomasnow", "alakazam"):
+    if agent not in ("abomasnow", "alakazam", "alakazam_toucannon"):
         raise ValueError(f"Unknown notebook pilot: {agent}")
-    folder = "alakazam" if agent == "alakazam" else "abomasnow-kyogre"
-    deck_folder = "alakazam_dudunsparce" if agent == "alakazam" else "abomasnow_kyogre"
-    title = "Alakazam / Dudunsparce experiment" if agent == "alakazam" else "Abomasnow / Kyogre baseline"
+    folder = {"alakazam": "alakazam", "alakazam_toucannon": "alakazam-toucannon"}.get(agent, "abomasnow-kyogre")
+    deck_folder = {"alakazam": "alakazam_dudunsparce", "alakazam_toucannon": "alakazam_toucannon"}.get(agent, "abomasnow_kyogre")
     output = ROOT / "decks" / deck_folder / f"{deck_folder}.ipynb"
-    cells = [cell("markdown", f"""# {title}
-
-Attach **the-pokemon-company-ptcg-ai-battle-challenge-playground** in Kaggle's
-Add Input panel, then Run All. No pip installs or network access are required.
-The notebook contains the Python agent and runner, locates the attached native
-SDK, tests against random play and writes a `submission.tar.gz` artifact.
-
-Run the agent-file setup cell before evaluation. It writes every required
-module together; evaluation and packaging refresh those files automatically.
-
-Generated from the project's tested Python modules with
-`python -X utf8 tools/build_notebook.py`. Change the Python sources and regenerate
-to keep the notebook synchronized. Saved outputs are intentionally cleared.
-
-The benchmark uses independent single games with balanced seats and starting
-order, not Kaggle BO3 matches. `POLICY_SEED` does not seed the engine's deals or
-coin flips. This is a heuristic baseline, not a trained model.
-"""), cell("code", """from pathlib import Path
+    cells = [cell("code", """from pathlib import Path
 import json
 import shutil
 import subprocess
@@ -85,7 +67,7 @@ shutil.copytree(SDK_ROOT / "cg", WORK_DIR / "cg", dirs_exist_ok=True,
                 ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
 print(f"Workspace: {WORK_DIR}\\nSDK: {SDK_ROOT}")
 """.replace("abomasnow-kyogre", folder).replace("__DECK_FOLDER__", deck_folder).replace("__PILOT__", agent)
-       .replace("__OPPONENT__", "abomasnow" if agent == "alakazam" else "random"))]
+       .replace("__OPPONENT__", "dragapult_proxy" if agent == "alakazam_toucannon" else "abomasnow" if agent == "alakazam" else "random"))]
     common = ["pokemon_agent/__init__.py", "pokemon_agent/sdk.py", "pokemon_agent/base.py",
               "pokemon_agent/random_agent.py", "pokemon_agent/agents.py", "pokemon_agent/runner.py",
               "decks/__init__.py"]
@@ -112,14 +94,7 @@ print(f"Workspace: {WORK_DIR}\\nSDK: {SDK_ROOT}")
              "prepare_workspace()\n"
              "print(f'Prepared {len(PROJECT_SOURCES)} agent files, including pokemon_agent/sdk.py')\n")
     cells.append(cell("code", setup))
-    cells += [cell("markdown", """## Evaluate the selected pilots and decks
-
-Random uses the candidate deck; a named opponent uses its own deck. Failed games
-are reported separately and never counted as wins. These are independent single
-games, not Kaggle BO3 matches. Results include a confidence interval and seat/start-order
-splits. The local game and decision deadlines below are safety guards, not
-verified competition limits.
-"""), cell("code", """if "prepare_workspace" not in globals():
+    cells += [cell("code", """if "prepare_workspace" not in globals():
     raise RuntimeError("Run the agent-file setup cell above first, or choose Run All.")
 prepare_workspace()
 stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
@@ -132,12 +107,6 @@ command = [sys.executable, "-X", "utf8", "-m", "pokemon_agent.runner",
 subprocess.run(command, cwd=WORK_DIR, check=True)
 report = json.loads(REPORT_PATH.read_text(encoding="utf-8"))
 print(json.dumps(report["summary"], indent=2))
-"""), cell("markdown", """## Build the Linux submission bundle
-
-The archive places `main.py` and `deck.csv` at its root and includes the Python
-modules and supplied x86-64 Linux engine. Building this file does not submit it.
-Validate it in the actual Kaggle runtime before uploading; local Windows tests
-do not establish Linux runtime compatibility.
 """), cell("code", """if "prepare_workspace" not in globals():
     raise RuntimeError("Run the agent-file setup cell above first, or choose Run All.")
 prepare_workspace()
@@ -165,5 +134,5 @@ print(f"Benchmark report: {REPORT_PATH}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--agent", choices=("abomasnow", "alakazam"), default="abomasnow")
+    parser.add_argument("--agent", choices=("abomasnow", "alakazam", "alakazam_toucannon"), default="abomasnow")
     build(parser.parse_args().agent)

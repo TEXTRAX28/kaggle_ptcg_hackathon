@@ -1,11 +1,104 @@
 # Pokémon TCG project handoff
 
-Updated: 2026-10-22. This repository contains two Python heuristic pilots:
+Updated: 2026-10-26. This repository contains two Python heuristic pilots:
 Mega Abomasnow ex/Kyogre and Alakazam/Dudunsparce. The current branch is
 `improvement-2-alakazam-replay`; `main` remains at `bfe80f7`. There is no neural
 network, BF16 implementation or training pipeline.
 
-## Completed replay audit and current improvements
+## Latest match-history audit and local fixes (2026-10-26)
+
+Completed the user's review of Kaggle submission `57640356`, linked episode
+`125433324`. Full report: `decks/alakazam_dudunsparce/MATCH_HISTORY_ANALYSIS.md`.
+The loaded snapshot has 130 rows: all 129 other-player BO3 matches are archived
+and analyzed (70 wins, 59 losses; 299 rounds; 38,300 raw steps). Self-match
+`125382210` is archived separately and excluded because both display names match.
+All 38,042 non-deck selections across both seats were legal. All 20,329 own
+choices matched the frozen pre-review local policy; this is behavioral agreement,
+not a submitted-source fingerprint. Latest snapshot opponent match: `125433619`.
+Later live matches are outside this snapshot.
+
+Main weaknesses: Crustle 3-12, Dragapult 6-15, Alakazam mirror 10-11. Of 1,111
+Powerful Hand attacks, 196 were nullified by visible protection: 163 by protective
+Energy and 33 by Abilities. One separate failure was an avoidable Confusion flip.
+Powerful Hand places counters as an attack effect; Mist Energy and Hide 'n' Sneak
+require different counter plans. Hammer alone does not solve Ability protection.
+
+Current uncommitted strategy changes recognize those protections, improve gust
+threats and Supporter/Energy recovery, allow safe low-deck searches, deploy Cage
+against visible precursor lines, and retreat a confused attacker to a ready
+replacement for the same KO. Enhanced Hammer support is available for experiments.
+Nine sanitized positions and thirteen tests were added. The original deck.csv
+is unchanged. A separate experimental `results/2026-10-26-submission-57640356/tech-deck.csv`
+adds two Hammer in place of one Basic Psychic and one Lana; it is not the default.
+
+Final verification: 62 root-discovered tests passed in 1.117s. All 20,329 saved
+positions produced legal final-policy actions; 1,276 choices changed in 106
+matches. Final balanced, unpaired local single-game cohorts: default 51/100
+vs frozen submitted pilot, 56/60 vs our Abomasnow, 40/40 vs random; experimental
+tech 44/100, 57/60 and 40/40 respectively. All 400 completed without errors.
+51/100 does not establish a strength increase; offline changed choices do not
+prove historical wins. Both regenerated notebooks ran four code cells and four
+local games each; archives matched all 15 embedded sources and contained the
+Linux library. Saved outputs remain cleared. New fixes have not run on Kaggle.
+
+Everything remains on `improvement-2-alakazam-replay`, HEAD `5020901`. New pending
+files are policy.py, test_policy.py, replay_positions.json, the match review,
+both regenerated notebooks and updated handoff/context. Earlier pending AGENTS.md
+and generator cleanup are preserved. No commit, push, merge or new submission.
+Raw replays, evidence, frozen sources and backups remain ignored under
+`match-data/` and `results/2026-10-26-submission-57640356/`.
+
+Graphify final refresh: only policy.py/test_policy.py re-extracted; 337 knowledge
+nodes, 543 edges, 23 communities, 32 current source hashes. Legacy IDs/history
+preserved; generated fixtures/notebooks/reports are not semantically indexed.
+
+The pilot still scores one action at a time. Permanent walls, disruption
+resilience and matchup-specific bench sizing remain open. The next competitive
+check needs competent held-out protection, Dragapult and mirror BO3 opponents.
+User preference: every assistant message begins with `yihii`.
+
+## Earlier notebook update and Git state
+
+
+The latest local commit is `5020901` (full hash
+`50209017b39912359fdb92676e3520d6a5ee4c2d`): **Improve Alakazam preparation and
+recovery from full replay audit**. Commit `0549661` immediately before it
+preserves the tested deck-folder layout. Both are on
+`improvement-2-alakazam-replay`; no merge into `main` has been requested.
+These are local Git checkpoints, not Kaggle uploads or submissions.
+
+On 2026-10-24, the user requested code-only notebooks. Both maintained notebooks
+now contain exactly **four code cells and no Markdown cells**. All executable
+cell contents are unchanged from the prior seven-cell versions, and saved
+outputs and execution counts are cleared. `tools/build_notebook.py` now generates
+this format; the durable preference is in `AGENTS.md` and local project memory.
+Keep explanations in project documentation rather than inside the notebooks.
+
+The following changes are still **uncommitted**, so commit `5020901` alone does
+not contain the latest notebook cleanup:
+
+- `AGENTS.md`: code-only notebook instruction.
+- `tools/build_notebook.py`: remove generated Markdown notes.
+- Both deck notebooks: regenerated as four code cells.
+- `HANDOFF.md`: this refreshed handoff.
+
+Preserve these pending changes when switching branches. No commit, push, merge,
+notebook regeneration or cloud edit was performed for this handoff-only request.
+
+Earlier notebook-format test run: **2026-10-24**, `python -X utf8 -m unittest discover -v`:
+**49 tests passed** in 1.622 seconds. Notebook checks confirmed zero Markdown
+cells, unchanged code, cleared outputs and successful compilation for both decks.
+Evidence: `results/2026-10-24-code-only-notebooks/verification.json` and
+`tests.txt` in that folder. These checks were not rerun for this documentation
+update. The current notebook revision still has no verified Kaggle runtime run.
+
+Graphify's notebook-generator source refresh (2026-10-24) covered only the notebook generator:
+**320 source nodes, 501 source edges, 23 communities, 32 indexed sources**.
+Generated notebooks, reports, README and HANDOFF are not semantically indexed;
+successful actions and conversations are recorded separately in graph history.
+Evidence: `results/2026-10-24-code-only-notebooks/graph-refresh.json`.
+
+## Earlier replay audit and improvements (2026-10-22)
 
 The 299-step audit of episode `125168227` and focused fixes are complete on
 `improvement-2-alakazam-replay`. Its first commit, `0549661`, preserves the tested
@@ -44,8 +137,10 @@ scored 88/100 vs Abomasnow in a separate batch. Native deals/coins were unseeded
 unpaired; these do not prove BO3 or ladder gains. Both regenerated notebooks
 ran all four code cells locally, four games each, with archives matching 15
 project sources and containing `cg/libcg.so`. Saved outputs are empty.
-Incremental Graphify refreshed only policy.py/test_policy.py: 320 source nodes,
-501 edges, 24 communities, all 32 source hashes current; legacy IDs preserved.
+The 2026-10-22 incremental Graphify refresh covered policy.py/test_policy.py:
+320 source nodes, 501 edges and 24 communities at that checkpoint, with all
+32 source hashes current and legacy IDs preserved. The later generator refresh
+and current notebook format are described above.
 
 The user permits accessing/editing their Kaggle notebook where possible:
 `https://www.kaggle.com/code/natanaelrehuels/ptcg-alakazam/edit/run/360438660`.
@@ -68,9 +163,10 @@ and strategy tests. Sanitized Abomasnow replay positions live with that deck.
 Shared runtime code stays in `pokemon_agent/`; shared developer tools and
 infrastructure tests stay in `tools/` and `tests/`. See README's layout table.
 
-`BaseAgent` now owns the common dispatch, visible lookup, Energy and readiness
-helpers. Both deck pilots inherit it. All scoring methods and 179 prior
-decisions are unchanged; both deck lists are byte-identical. The SDK loader,
+`BaseAgent` owns the common dispatch, visible lookup, Energy and readiness
+helpers. Both deck pilots inherit it. The layout move preserved all scoring
+methods, 179 prior decisions and both deck lists; subsequent Alakazam policy
+changes are described above. The SDK loader,
 registry, report fingerprint paths, replay tool and notebook generator use
 the new locations. The archive still supplies root `main.py` and `deck.csv`.
 
@@ -79,7 +175,8 @@ Local generated files now go to `build/notebooks/<deck-folder>/`. The old
 The two notebooks have moved into the deck folders, so `ipynb/` is gone.
 Existing `/build/` ignore rules cover the new workspaces and preserved files.
 
-Validation: 38 tests pass with `python -X utf8 -m unittest discover -v`.
+Historical layout validation on 2026-10-20: 38 tests passed with
+`python -X utf8 -m unittest discover -v`.
 All four code cells in both notebooks ran locally from their deck folders;
 four games per notebook completed without errors, deleted `sdk.py` was restored,
 and both archives passed member/source/Linux-library checks. Each embeds 15
@@ -161,9 +258,10 @@ Consolidation checks on 2026-10-20:
 
 - `python -X utf8 -m unittest discover -s tests -v`: **38 tests passed** on
   Windows. This includes actual native games and notebook module recovery.
-- Both saved notebooks contain seven cells, four of them code, with empty
-  outputs and no execution counts.
-- All 24 indexed Graphify source hashes match the current files.
+- At that checkpoint, both saved notebooks contained seven cells, four of
+  them code, with empty outputs and no execution counts. Current notebooks
+  contain four code cells only.
+- All 24 indexed Graphify source hashes matched the files at that checkpoint.
 - Private memory, nested graph caches, local backups and generated archives
   are excluded by `.gitignore`.
 
@@ -222,17 +320,22 @@ Local source changes do not automatically update an existing Kaggle notebook.
    `notes/CONTEXT.md`, query the graph and consult its report before inspecting
    only the necessary source passages. Do not assume ignored memory exists
    in a fresh clone.
-2. Continue current fixes on `improvement-2-alakazam-replay`; keep `main`
-   unchanged until a merge is requested. Frozen Alakazam baseline is `0549661`.
-3. Collect additional full BO3 replays and test against competent, varied
-   opponents, especially hand disruption and bench pressure. Timing-only
-   stdout/stderr downloads are insufficient for gameplay analysis.
+2. Continue work on `improvement-2-alakazam-replay`; the replay fixes are committed.
+   Keep `main`
+   unchanged until a merge is requested. Preserve the uncommitted notebook
+   cleanup described above. Frozen Alakazam baseline is `0549661`.
+3. Read the completed 129-match review in
+   `decks/alakazam_dudunsparce/MATCH_HISTORY_ANALYSIS.md`. Collect fresh held-out
+   BO3 evidence for the new fixes against protection, Dragapult and mirror pilots.
+   Timing-only stdout/stderr downloads are insufficient for gameplay analysis.
 4. Improve the decisions revealed by those games and compare balanced results.
    Do not infer that a popular deck or a dtype change will improve the rating.
 5. Record each user/assistant message and successful action with
    `tools/graph_memory.py`; refresh source extraction only for changed indexed
    facts. Keep generated memory and caches ignored.
 
-The user's BF16 question was interrupted by this merge request. No BF16 change
-was authorized or implemented. A future neural model would need profiling and
-evaluation before deciding its precision. No new training work was started.
+BF16 and diverse-opponent training were assessed in the replay report. The
+current pilots remain hand-written heuristics. A future neural learner needs
+visible-observation encoding, legal-action handling, a varied opponent pool,
+separate evaluation opponents and profiling before choosing a numeric precision.
+No neural network, BF16 implementation or training pipeline was built.

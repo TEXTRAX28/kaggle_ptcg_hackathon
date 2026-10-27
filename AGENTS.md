@@ -79,6 +79,8 @@ final reply record documents the reply text, not independently confirmed deliver
   notebook workspaces under ignored `build/notebooks/`. Each notebook is generated from
   the tested Python modules with `python -X utf8 tools/build_notebook.py`.
   Regenerate it after source changes and keep saved notebook outputs cleared.
+  Generated notebooks must contain code cells only; keep explanatory notes and
+  Markdown in the project documentation, not in the notebooks.
 - Record local test results honestly; local Windows execution is not proof of
   compatibility with Kaggle's Linux runtime.
 

@@ -20,7 +20,7 @@ class NotebookSetupTests(unittest.TestCase):
         # Inspect newly generated cells without replacing either user notebook.
         with patch.object(Path, "write_text", return_value=0), redirect_stdout(io.StringIO()):
             cls.notebooks = {pilot: build_notebook.build(pilot)
-                             for pilot in ("abomasnow", "alakazam")}
+                             for pilot in ("abomasnow", "alakazam", "alakazam_toucannon")}
 
     def test_evaluation_repairs_missing_sdk_before_fresh_python_import(self):
         for pilot, notebook in self.notebooks.items():
