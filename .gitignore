@@ -1,4 +1,5 @@
 # Private local knowledge, conversation history and source snapshots
+/HANDOFF.md
 graphify-out/
 /notes/
 /raw/
